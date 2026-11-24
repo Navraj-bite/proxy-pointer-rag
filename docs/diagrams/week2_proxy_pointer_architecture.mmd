@@ -1,0 +1,10 @@
+%% Week 2 — Structure-aware Proxy-Pointer RAG + Hybrid Router
+flowchart TD
+    Q["🙋 User Query"] --> R{"🧭 Hybrid Router<br/>classify_query()<br/>regex fast / deep"}
+    R -- "fast (0 triggers)" --> FAST["⚡ Fine-tuned SLM<br/>direct answer"]
+    R -- "deep (≥1 trigger)" --> PE["🔢 Proxy Embedding<br/>all-MiniLM-L6-v2<br/>(heading + 1st body line)"]
+    PE --> FA["🗂️ FAISS<br/>pp_faiss.index<br/>(proxy vectors)"]
+    FA --> PT["🔗 Pointer<br/>pp_metadata.pkl<br/>pointer_node_id"]
+    PT --> DT["🌳 Document Tree<br/>pp_tree.pkl<br/>DocumentNode hierarchy"]
+    DT --> CS["📄 Complete Section<br/>full body_content<br/>(intact tables)"]
+    CS --> GEN["🧠 Grounded Answer<br/>(RAG + SLM)"]

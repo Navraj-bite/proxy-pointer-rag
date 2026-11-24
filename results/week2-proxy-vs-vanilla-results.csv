@@ -1,0 +1,31 @@
+id,question,category,vanilla_rag_score,vanilla_rag_latency,hybrid_score,hybrid_latency,retrieval_correct_vanilla,retrieval_correct_hybrid
+1,What are the columns in the DataLiner error message table?,tabular,0.6346,57.09,0.5714,11.76,True,False
+2,What mci number and category is assigned to the air pressure alarm?,tabular,0.7885,7.46,0.7893,22.45,False,False
+3,Which alarms in the DataLiner table have FDA logging enabled?,tabular,0.2896,26.79,0.588,8.14,False,False
+4,What are the fields in the Filling 1 parameters table in the production file?,tabular,0.5926,26.76,0.3723,17.89,False,False
+5,What are the column headers in the filling monitoring results table per station?,tabular,0.7036,22.53,0.7464,17.88,False,False
+6,What summary statistics are shown below the per-station filling table?,tabular,0.7606,13.06,0.6622,6.44,True,False
+7,What category does mci0010 (Speed controller defect) belong to in the DataLiner table?,tabular,0.7183,8.05,0.8083,6.5,True,True
+8,What are the numeric field values shown in the draining mode Numeric fields window?,tabular,0.7381,7.6,0.7519,4.68,True,True
+9,What is the mci number and category for the Motor overload alarm?,tabular,0.716,6.38,0.6581,23.31,False,False
+10,What mci number corresponds to the Conveyor stopped alarm and what is its category?,tabular,0.6831,7.76,0.6602,22.65,True,True
+11,What are the steps to start production mode on the Serac filling machine?,procedure,0.6211,27.53,0.3249,32.22,True,False
+12,What are the steps to start draining mode?,procedure,0.8297,27.93,0.883,35.43,True,True
+13,What are the steps to start cleaning mode?,procedure,0.8355,27.88,0.7669,36.78,True,True
+14,What should the operator do in the Action window during production startup?,procedure,0.4024,5.89,0.5584,23.1,False,False
+15,How do you modify the weight target value in the Filling tab during production?,procedure,0.6957,10.77,0.6652,20.31,True,False
+16,What are the steps to select a purge type when starting production?,procedure,0.611,35.17,0.7069,46.51,True,True
+17,How do you use the Filter function when selecting a production file?,procedure,0.2254,37.76,0.6413,26.97,False,False
+18,What toolbar icons are available in the draining mode main screen?,procedure,0.6951,13.39,0.6828,30.52,True,False
+19,What happens after you press OK in the production data modification window?,procedure,0.5687,23.21,0.6365,48.6,False,False
+20,How do you access more information about a production file before selecting it?,procedure,0.6844,48.54,0.6214,65.39,False,False
+21,What applications are available in the taskbar?,navigation,0.5347,31.0,0.6992,62.39,False,False
+22,Where is the taskbar located on the screen?,navigation,0.9287,16.07,0.8836,8.84,True,True
+23,What does the green color of the information field at the bottom right of the screen indicate?,navigation,0.6375,19.21,0.7746,33.42,True,True
+24,What information is shown in the bottom-right information field on the screen?,navigation,0.8389,20.34,0.4375,12.0,True,False
+25,Which taskbar icon do I use to access maintenance functions?,navigation,0.8756,17.4,0.4809,33.02,True,True
+26,Where do I press to access the Filling Monitoring screen?,navigation,0.69,29.38,0.7302,22.12,True,True
+27,What pressure should be set on the Lid Pressing System for 10L and 20L lids?,navigation,0.9838,35.03,0.7759,41.35,True,True
+28,Which tab in the Production data modification window is used to enter the filling target value?,navigation,0.9349,15.55,0.9465,10.17,True,True
+29,Where do you find the Station selector in the filling monitoring screen?,navigation,0.915,16.07,0.7924,13.73,True,True
+30,What does the More... button do in the Select production file window?,navigation,0.8212,25.12,0.8135,56.05,True,True

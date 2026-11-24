@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="720" viewBox="0 0 560 720" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="720" fill="#f8fafc"/>
+  <text x="280" y="32" text-anchor="middle" font-size="19" font-weight="700" fill="#1e293b">Week 2 — Proxy-Pointer RAG + Hybrid Router</text>
+
+  <!-- Query -->
+  <rect x="200" y="52" width="160" height="46" rx="10" fill="#e0f2fe" stroke="#7dd3fc"/>
+  <text x="280" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#1e293b">User Query</text>
+
+  <!-- Router diamond-ish -->
+  <rect x="180" y="128" width="200" height="56" rx="10" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="280" y="150" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1e293b">Hybrid Router</text>
+  <text x="280" y="168" text-anchor="middle" font-size="10.5" fill="#64748b">classify_query() · fast / deep</text>
+
+  <!-- Fast branch -->
+  <rect x="20" y="220" width="180" height="56" rx="10" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text x="110" y="242" text-anchor="middle" font-size="13" font-weight="700" fill="#065f46">⚡ Fast: Fine-tuned SLM</text>
+  <text x="110" y="260" text-anchor="middle" font-size="10.5" fill="#64748b">direct answer (0 triggers)</text>
+
+  <!-- Deep chain -->
+  <g stroke="#cbd5e1" stroke-width="1.5">
+    <rect x="330" y="220" width="210" height="52" rx="10" fill="#ffffff"/>
+    <rect x="330" y="300" width="210" height="52" rx="10" fill="#ffffff"/>
+    <rect x="330" y="380" width="210" height="52" rx="10" fill="#ffffff"/>
+    <rect x="330" y="460" width="210" height="52" rx="10" fill="#ffffff"/>
+    <rect x="330" y="540" width="210" height="52" rx="10" fill="#e0f2fe"/>
+  </g>
+  <g text-anchor="middle" fill="#1e293b">
+    <text x="435" y="240" font-size="13" font-weight="700">Proxy Embedding</text>
+    <text x="435" y="258" font-size="10" fill="#64748b">MiniLM · heading + 1st line</text>
+    <text x="435" y="320" font-size="13" font-weight="700">FAISS · pp_faiss.index</text>
+    <text x="435" y="338" font-size="10" fill="#64748b">proxy vectors</text>
+    <text x="435" y="400" font-size="13" font-weight="700">Pointer</text>
+    <text x="435" y="418" font-size="10" fill="#64748b">pp_metadata.pkl · pointer_node_id</text>
+    <text x="435" y="480" font-size="13" font-weight="700">Document Tree</text>
+    <text x="435" y="498" font-size="10" fill="#64748b">pp_tree.pkl · 319 nodes</text>
+    <text x="435" y="560" font-size="13" font-weight="700">Complete Section</text>
+    <text x="435" y="578" font-size="10" fill="#64748b">full body · intact tables</text>
+  </g>
+
+  <!-- Answer -->
+  <rect x="200" y="636" width="160" height="50" rx="10" fill="url(#g2)" stroke="#0284c7"/>
+  <text x="280" y="660" text-anchor="middle" font-size="13.5" font-weight="700" fill="#fff">Grounded Answer</text>
+  <text x="280" y="676" text-anchor="middle" font-size="10" fill="#e0f2fe">RAG + SLM</text>
+
+  <!-- arrows -->
+  <g stroke="#475569" stroke-width="2" fill="none">
+    <line x1="280" y1="98" x2="280" y2="126" marker-end="url(#a2)"/>
+    <path d="M200,160 C120,175 110,195 110,218" marker-end="url(#a2)"/>
+    <path d="M360,162 C440,175 435,195 435,218" marker-end="url(#a2)"/>
+    <line x1="435" y1="272" x2="435" y2="298" marker-end="url(#a2)"/>
+    <line x1="435" y1="352" x2="435" y2="378" marker-end="url(#a2)"/>
+    <line x1="435" y1="432" x2="435" y2="458" marker-end="url(#a2)"/>
+    <line x1="435" y1="512" x2="435" y2="538" marker-end="url(#a2)"/>
+    <path d="M435,592 C435,615 360,625 340,648" marker-end="url(#a2)"/>
+    <path d="M110,276 C110,470 200,630 214,650" marker-end="url(#a2)"/>
+  </g>
+</svg>

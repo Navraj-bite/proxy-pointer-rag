@@ -1,0 +1,31 @@
+# secrets
+.env
+.env.*
+*.key
+
+# proprietary corpus and anything derived from it
+*.pdf
+operator_manual.md
+machine_overview_troubleshooting.md
+train.jsonl
+benchmark_questions.jsonl
+evaluation_prompts.jsonl
+comparison.csv
+rag_baseline_outputs.csv
+finetuned_outputs.csv
+*.bak
+
+# built indices / embeddings (contain corpus text)
+*.pkl
+*.index
+serac-gemma-adapter/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.venv-*/
+
+# os
+.DS_Store

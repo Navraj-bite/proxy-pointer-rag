@@ -1,0 +1,9 @@
+%% Week 1 — Traditional RAG baseline pipeline (naive_rag_baseline.py)
+flowchart TD
+    A["📄 Source PDFs<br/>machine_overview_troubleshooting.pdf<br/>operator_manual.pdf"] --> B
+    B["✂️ Chunking<br/>RecursiveCharacterTextSplitter<br/>chunk_size=500 · overlap=50"] --> C
+    C["🔢 Embeddings<br/>all-MiniLM-L6-v2<br/>(normalized)"] --> D
+    D["🗂️ Vector Index<br/>FAISS IndexFlatIP<br/>(cosine via inner product)"] --> E
+    E["🔎 Top-K Retrieval<br/>k = 4 chunks"] --> F
+    F["🧠 Generation<br/>TinyLlama-1.1B-Chat<br/>(stand-in for Gemma-3-1b)"] --> G
+    G["💬 Grounded Answer"]
