@@ -15,12 +15,15 @@ import random
 import faiss
 from sentence_transformers import SentenceTransformer
 
+from corpus_config import ensure_parent_dir, get_config
 from document_tree_builder import DocumentTree
 
-INPUT_FILES   = ["machine_overview_troubleshooting.md", "operator_manual.md"]
-PP_INDEX_FILE = "pp_faiss.index"
-PP_META_FILE  = "pp_metadata.pkl"
-PP_TREE_FILE  = "pp_tree.pkl"
+# Paths come from $PPRAG_CORPUS (default "private" -> the original file names).
+_CFG          = get_config()
+INPUT_FILES   = _CFG["input_files"]
+PP_INDEX_FILE = _CFG["pp_index_file"]
+PP_META_FILE  = _CFG["pp_meta_file"]
+PP_TREE_FILE  = _CFG["pp_tree_file"]
 EMBED_MODEL   = "all-MiniLM-L6-v2"
 
 
@@ -85,6 +88,8 @@ def build_proxy_index(tree):
     index = faiss.IndexFlatIP(vecs.shape[1])
     index.add(vecs)
 
+    for path in (PP_INDEX_FILE, PP_META_FILE, PP_TREE_FILE):
+        ensure_parent_dir(path)
     faiss.write_index(index, PP_INDEX_FILE)
     with open(PP_META_FILE, "wb") as f:
         pickle.dump(metadata, f)

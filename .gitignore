@@ -38,3 +38,7 @@ venv/
 
 # os
 .DS_Store
+
+# public corpus (fetched by scripts/fetch_corpus.sh) and its derived indices
+corpus/
+artifacts/

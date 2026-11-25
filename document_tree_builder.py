@@ -17,10 +17,10 @@ HEADER_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 # A line that begins a markdown numbered procedure step, e.g. "1. Do the thing".
 NUMBERED_STEP_RE = re.compile(r"^\s*\d+\.\s+\S")
 
-INPUT_FILES = [
-    "machine_overview_troubleshooting.md",
-    "operator_manual.md",
-]
+from corpus_config import get_config
+
+# Selected by $PPRAG_CORPUS (default "private": the two original manuals).
+INPUT_FILES = get_config()["input_files"]
 
 
 class DocumentNode:
@@ -120,6 +120,36 @@ class DocumentTree:
         # Tidy up trailing whitespace on every body we just built.
         for node in self.nodes.values():
             node.body_content = node.body_content.strip("\n")
+
+
+def doc_id_of(tree, node):
+    """Source file of a node: the path its [FILE] ancestor was added with."""
+    cur = node
+    while cur is not None:
+        if cur.heading_title.startswith("[FILE] "):
+            return cur.heading_title[len("[FILE] "):]
+        cur = tree.nodes.get(cur.parent_node_id) if cur.parent_node_id else None
+    return None
+
+
+def heading_path(tree, node):
+    """Heading titles from the top-level heading down to `node` (no ROOT/[FILE])."""
+    path = []
+    cur = node
+    while cur is not None and cur.parent_node_id is not None \
+            and not cur.heading_title.startswith("[FILE] "):
+        path.append(cur.heading_title)
+        cur = tree.nodes[cur.parent_node_id]
+    return list(reversed(path))
+
+
+def find_by_heading_path(tree, doc, path):
+    """All nodes in file `doc` whose heading_path equals `path` (list of titles)."""
+    return [
+        n for n in tree.nodes.values()
+        if n.parent_node_id is not None and not n.heading_title.startswith("[FILE] ")
+        and heading_path(tree, n) == list(path) and doc_id_of(tree, n) == doc
+    ]
 
 
 # --------------------------------------------------------------------------- #

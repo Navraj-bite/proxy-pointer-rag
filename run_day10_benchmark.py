@@ -14,20 +14,33 @@ Config B — Hybrid Router + Proxy-Pointer:
   + TinyLlama generation
 
 Usage:
-    python3 run_day10_benchmark.py
+    python3 run_day10_benchmark.py                       # private corpus (default)
+    PPRAG_CORPUS=public python3 run_day10_benchmark.py   # public corpus, see docs/corpus.md
+    ... --retrieval-only     # no generation: what each config retrieves (+ gold hits)
+    ... --limit N            # first N questions only
+    ... --questions PATH     # override the corpus' question file
+
+Input/output paths come from corpus_config.py ($PPRAG_CORPUS).
 """
 
+import argparse
 import csv
 import json
+import os
 import sys
 import time
 
 import numpy as np
 
+from corpus_config import assistant_intro, ensure_parent_dir, get_config
+
+_CFG = get_config()
+
 # ---------------------------------------------------------------------------
 # Load benchmark questions
 # ---------------------------------------------------------------------------
-def load_questions(path="benchmark_questions.jsonl"):
+def load_questions(path=None):
+    path = path or _CFG["questions_file"]
     questions = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -97,8 +110,10 @@ RETRIEVAL_KEYWORDS = {
 }
 
 
-def retrieval_correct_auto(question_id: int, generated_answer: str) -> bool:
-    keywords = RETRIEVAL_KEYWORDS.get(question_id, [])
+def retrieval_correct_auto(question_id: int, generated_answer: str, keywords=None) -> bool:
+    # Questions may carry their own `keywords`; the table above is the private set's.
+    if keywords is None:
+        keywords = RETRIEVAL_KEYWORDS.get(question_id, []) if _CFG["name"] == "private" else []
     if not keywords:
         return False
     answer_lower = generated_answer.lower()
@@ -117,7 +132,7 @@ def _load_vanilla():
     global _vanilla_index, _vanilla_chunks, _vanilla_embed
     if _vanilla_index is not None:
         return
-    print("  [vanilla] loading faiss.index + chunks.pkl ...", flush=True)
+    print(f"  [vanilla] loading {_CFG['flat_index_file']} + {_CFG['flat_chunks_file']} ...", flush=True)
     from naive_rag_baseline import load_index
     _vanilla_index, _vanilla_chunks, _vanilla_embed = load_index()
     print("  [vanilla] index ready.", flush=True)
@@ -149,7 +164,7 @@ def vanilla_answer(question: str) -> str:
     context = "\n\n---\n\n".join(chunks)
     context = context[:1200]  # cap to fit within TinyLlama's 2048-token window
     system = (
-        "You are a support assistant for Serac filling machines. "
+        assistant_intro() + " "
         "Answer the question using ONLY the context below. "
         "If the answer is not in the context, say you don't know."
     )
@@ -194,7 +209,7 @@ def run_benchmark(questions):
         v_ans = vanilla_answer(text)
         v_lat = round(time.time() - t0, 2)
         v_score = round(cosine_score(ref, v_ans), 4)
-        v_correct = retrieval_correct_auto(qid, v_ans)
+        v_correct = retrieval_correct_auto(qid, v_ans, q.get("keywords"))
         print(f"    vanilla  score={v_score:.4f}  lat={v_lat:.1f}s  correct={v_correct}", flush=True)
 
         # --- Hybrid ---
@@ -202,7 +217,7 @@ def run_benchmark(questions):
         h_ans = hybrid_answer(text)
         h_lat = round(time.time() - t0, 2)
         h_score = round(cosine_score(ref, h_ans), 4)
-        h_correct = retrieval_correct_auto(qid, h_ans)
+        h_correct = retrieval_correct_auto(qid, h_ans, q.get("keywords"))
         print(f"    hybrid   score={h_score:.4f}  lat={h_lat:.1f}s  correct={h_correct}", flush=True)
 
         results.append({
@@ -225,7 +240,9 @@ def run_benchmark(questions):
 # ---------------------------------------------------------------------------
 # CSV output
 # ---------------------------------------------------------------------------
-def write_csv(results, path="proxy_rag_vs_vanilla_rag_results.csv"):
+def write_csv(results, path=None):
+    path = path or _CFG["results_csv"]
+    ensure_parent_dir(path)
     fieldnames = [
         "id", "question", "category",
         "vanilla_rag_answer", "vanilla_rag_score", "vanilla_rag_latency",
@@ -242,8 +259,10 @@ def write_csv(results, path="proxy_rag_vs_vanilla_rag_results.csv"):
 # ---------------------------------------------------------------------------
 # Markdown report
 # ---------------------------------------------------------------------------
-def write_report(results, path="proxy_rag_vs_vanilla_rag.md"):
+def write_report(results, path=None):
     import statistics
+    path = path or _CFG["report_md"]
+    ensure_parent_dir(path)
 
     cats = ["tabular", "procedure", "navigation"]
 
@@ -362,12 +381,123 @@ def write_report(results, path="proxy_rag_vs_vanilla_rag.md"):
 
 
 # ---------------------------------------------------------------------------
+# Retrieval-only mode (no generation)
+#
+# Records what each configuration would put in front of the generator, and —
+# when a question has `gold` labels — a smoke-level hit check. This is not the
+# evaluation metric suite; it only proves the retrieval path runs end to end.
+# ---------------------------------------------------------------------------
+def _chunk_spans(chunk, docs):
+    """(doc, first_line, last_line) of every exact occurrence of a flat chunk."""
+    spans = []
+    for path, text in docs.items():
+        start = text.find(chunk)
+        while start >= 0:
+            first = text.count("\n", 0, start) + 1
+            spans.append((path, first, first + chunk.count("\n")))
+            start = text.find(chunk, start + 1)
+    return spans
+
+
+def run_retrieval(questions, k=4):
+    from naive_rag_baseline import retrieve
+    import context_assembler as ca
+    from document_tree_builder import doc_id_of, find_by_heading_path, heading_path
+    from hybrid_intent_router import classify_query
+
+    _load_vanilla()
+    ca._load()
+    tree = ca._tree
+    docs = {}
+    if _CFG["baseline_source"] == "markdown":
+        for p in _CFG["input_files"]:
+            with open(p, encoding="utf-8") as f:
+                docs[p] = f.read()
+
+    rows = []
+    for q in questions:
+        route, conf = classify_query(q["question"])
+        context, meta = ca.query_with_meta(q["question"])
+        node = tree.nodes[meta["node_id"]]
+        chunks = retrieve(q["question"], _vanilla_index, _vanilla_chunks, _vanilla_embed, k=k)
+        spans = [s for c in chunks for s in _chunk_spans(c, docs)] if docs else []
+
+        gold_nodes = []
+        for g in q.get("gold", []):
+            gold_nodes += find_by_heading_path(tree, g["doc"], g["heading_path"])
+        gold_ids = {n.node_id for n in gold_nodes}
+        row = {
+            "id": q["id"], "category": q["category"], "question": q["question"],
+            "router_route": f"{route}/{conf}",
+            "pp_doc": meta["doc_id"],
+            "pp_heading_path": " > ".join(heading_path(tree, node)),
+            "pp_score": round(meta["score"], 4),
+            "pp_context_chars": len(context),
+            "vanilla_context_chars": len("\n\n---\n\n".join(chunks)),
+            "vanilla_chunk_spans": "; ".join(f"{d}:{a}-{b}" for d, a, b in spans),
+            "gold": " | ".join(f"{g['doc']} :: {' > '.join(g['heading_path'])}"
+                               for g in q.get("gold", [])),
+        }
+        if gold_nodes:
+            # gold node is the hit itself, or a direct child whose body the
+            # assembler appends to the context
+            row["pp_gold_node_hit"] = node.node_id in gold_ids
+            row["pp_gold_in_context"] = bool(gold_ids & ({node.node_id} | set(node.child_node_ids)))
+            # a flat chunk overlaps the gold node's line span (markdown source only)
+            row["vanilla_gold_in_context"] = any(
+                d == doc_id_of(tree, gn) and a <= gn.end_line and b >= gn.start_line
+                for d, a, b in spans for gn in gold_nodes
+            ) if docs else None
+        rows.append(row)
+        print(f"  Q{q['id']:>3} [{q['category']:<10}] route={route:<4} "
+              f"pp={row['pp_heading_path'][:60]!r}"
+              + (f"  pp_hit={row['pp_gold_in_context']} vanilla_hit={row['vanilla_gold_in_context']}"
+                 if gold_nodes else ""), flush=True)
+    return rows
+
+
+def write_retrieval_csv(rows, path=None):
+    path = path or _CFG["retrieval_csv"]
+    ensure_parent_dir(path)
+    fields = []
+    for r in rows:
+        fields += [k for k in r if k not in fields]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)
+    print(f"\n  saved {path}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def main():
+    ap = argparse.ArgumentParser(description="Vanilla RAG vs hybrid proxy-pointer benchmark")
+    ap.add_argument("--questions", help=f"question file (default {_CFG['questions_file']})")
+    ap.add_argument("--limit", type=int, help="only the first N questions")
+    ap.add_argument("--retrieval-only", action="store_true",
+                    help="skip generation; record retrieved contexts and gold hits")
+    args = ap.parse_args()
+
+    print(f"Corpus: {_CFG['name']}  ($PPRAG_CORPUS)")
     print("Loading benchmark questions ...")
-    questions = load_questions()
+    questions = load_questions(args.questions)
+    if args.limit:
+        questions = questions[:args.limit]
     print(f"  {len(questions)} questions loaded")
+
+    if args.retrieval_only:
+        print("\nRunning retrieval only (no generation) ...")
+        rows = run_retrieval(questions)
+        write_retrieval_csv(rows)
+        graded = [r for r in rows if "pp_gold_in_context" in r]
+        if graded:
+            pp = sum(bool(r["pp_gold_in_context"]) for r in graded)
+            va = sum(r["vanilla_gold_in_context"] is True for r in graded)
+            print(f"  gold section in context: proxy-pointer {pp}/{len(graded)}  "
+                  f"vanilla top-4 {va}/{len(graded)}  (smoke check, not the metric suite)")
+        return
 
     print("\nRunning evaluation ...")
     results = run_benchmark(questions)
@@ -406,7 +536,7 @@ def main():
         print(f"  Q{r['id']:02d} | {r['category']:12} | vanilla={r['vanilla_rag_score']:.4f} hybrid={r['hybrid_score']:.4f}")
 
     # Print conclusion section
-    with open("proxy_rag_vs_vanilla_rag.md", encoding="utf-8") as f:
+    with open(_CFG["report_md"], encoding="utf-8") as f:
         content = f.read()
     conclusion_start = content.find("## Conclusion")
     if conclusion_start >= 0:
