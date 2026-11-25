@@ -123,6 +123,31 @@ the first 20 evaluation prompts have near-duplicates in the training set.
   the per-question generated answers are all excluded. The pipeline is corpus-agnostic — point
   `parse_documents.py` at your own PDFs and the rest runs.
 
+## Reproduce on a public corpus
+
+The private-corpus numbers above can't be regenerated from a clone. To check the pipeline
+independently, run it on a pinned public corpus: a subset of the
+[PX4 User Guide](https://github.com/PX4/PX4-user_guide) (CC BY 4.0, tag `v1.17.0`, commit
+`d6f12ad`). It has calibration procedures, parameter tables, status tables and
+troubleshooting, about 0.5 MB of markdown. The fetch script checks every file against a
+committed sha256 manifest. A deterministic, stdlib-only converter then turns it into
+heading-structured markdown. No API key is needed.
+
+```bash
+pip install sentence-transformers faiss-cpu langchain-text-splitters pypdf
+./scripts/fetch_corpus.sh                       # download, verify, convert -> corpus/
+export PPRAG_CORPUS=public
+python3 check_corpus_tree.py --questions questions/public_seed.jsonl
+python3 proxy_pointer_indexer.py
+python3 naive_rag_baseline.py --build-only      # flat baseline over the same markdown
+python3 run_day10_benchmark.py --retrieval-only # or drop the flag to generate answers
+```
+
+`PPRAG_CORPUS` defaults to `private` (the original setup). Public indices and outputs go to
+`artifacts/public/`. On macOS, set `OMP_NUM_THREADS=1` for generation runs (faiss/torch
+import-order segfault). Licence, conversion rules, tree statistics and the question/gold format
+are in [`docs/corpus.md`](docs/corpus.md).
+
 ## Running it on your own corpus
 
 ```bash
