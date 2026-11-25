@@ -200,8 +200,14 @@ python3 check_corpus_tree.py --questions questions/public_seed.jsonl   # tree st
 python3 proxy_pointer_indexer.py                # -> artifacts/public/pp_faiss.index (654 vectors)
 python3 naive_rag_baseline.py --build-only      # -> artifacts/public/faiss.index (1423 chunks)
 python3 run_day10_benchmark.py --retrieval-only # retrieval for both configs, no LLM
-python3 run_day10_benchmark.py --limit 2        # generation smoke test (TinyLlama, CPU)
+OMP_NUM_THREADS=1 python3 run_day10_benchmark.py --limit 2   # generation smoke test (TinyLlama, CPU)
 ```
+
+`OMP_NUM_THREADS=1` is needed in this environment (faiss-cpu 1.13 with torch 2.8 on macOS
+arm64). When faiss is imported before torch, loading the TinyLlama pipeline segfaults
+(exit 139) unless OpenMP is limited to one thread. The crash reproduces with just
+`import faiss, torch` followed by `transformers.pipeline(...)`. It comes from the
+environment, not from the corpus code, and it would affect the private run the same way.
 
 `fetch_corpus.sh` is idempotent. If a verified copy is already in
 `corpus/raw/px4-<commit>/`, it skips the download and only re-converts. `--force`
@@ -222,4 +228,10 @@ transformers 4.57.6; curl 8.7.1. Models were loaded from the local HF cache
 - `--retrieval-only` on the 12 seed questions. Gold section in the assembled context:
   proxy-pointer 7/12, flat top-4 9/12. This is a smoke check of the path, not a
   benchmark result: 12 questions are far too few, and the metric suite is a separate task.
-- `--limit 2` generation smoke test: see the "Generation smoke test" note below.
+- `OMP_NUM_THREADS=1 … --limit 2` generation smoke test (TinyLlama-1.1B-Chat, fp32, CPU)
+  completed (exit 0) and wrote `artifacts/public/proxy_rag_vs_vanilla_rag_{results.csv,.md}`.
+  Q1: vanilla 0.8339 vs hybrid 0.6734. Q2: vanilla 0.8283 vs hybrid 0.8543. Mean latency
+  was 17.5 s vs 18.4 s, and peak RSS about 4.6 GB. Two questions only prove the path runs;
+  these are not results. Two caveats for later tasks: the hybrid path caps the context
+  at 1,200 chars before generation, which can cut off the very table the pointer returned;
+  and `write_report()`'s "Conclusion" prose is hard-coded text about the private corpus.
