@@ -518,6 +518,8 @@ def main():
     print(f"{'Category':<12}  {'Vanilla RAG':>11}  {'Hybrid':>11}")
     print("-" * 38)
     for c in cats:
+        if not any(r["category"] == c for r in results):
+            continue  # e.g. --limit picked no question of this category
         v = statistics.mean(r["vanilla_rag_score"] for r in results if r["category"] == c)
         h = statistics.mean(r["hybrid_score"]      for r in results if r["category"] == c)
         print(f"{c:<12}  {v:>11.4f}  {h:>11.4f}")
