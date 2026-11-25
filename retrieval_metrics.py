@@ -216,7 +216,7 @@ def resolve_gold(tree, gold_records, question_ids=None):
             raise GoldResolutionError(f"question {qid}: empty gold list")
         ids = []
         for g in rec["gold"]:
-            nid = resolve_heading_path(tree, g["doc"], g["heading_path"])
+            nid = resolve_heading_path(tree, os.path.basename(g["doc"]), g["heading_path"])
             if not is_indexable(tree, tree.nodes[nid]):
                 raise GoldResolutionError(f"question {qid}: gold {g} is not an indexable section")
             if nid not in ids:
@@ -784,7 +784,9 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--md", nargs="+", required=True, help="corpus markdown files (tree source)")
     ap.add_argument("--questions", required=True, help="JSONL with id, question, category")
-    ap.add_argument("--gold", required=True, help="gold label JSONL (see docs/retrieval-metrics.md)")
+    ap.add_argument("--gold", default=None,
+                    help="gold label JSONL (see docs/retrieval-metrics.md); if omitted, the "
+                         "`gold` field inline in --questions is used (public-corpus format)")
     ap.add_argument("--k", nargs="+", type=int, default=list(DEFAULT_K))
     ap.add_argument("--ndcg-k", type=int, default=5)
     ap.add_argument("--mrr-depth", type=int, default=10)
@@ -811,7 +813,8 @@ def main(argv=None):
     np.random.seed(args.seed)
 
     questions = load_jsonl(args.questions)
-    gold_records = load_jsonl(args.gold)
+    gold_records = load_jsonl(args.gold) if args.gold else [
+        {"id": q["id"], "gold": q.get("gold")} for q in questions]
     tree = build_tree(args.md)
     gold = resolve_gold(tree, gold_records, [q["id"] for q in questions])
     print(f"gold resolved: {sum(len(v) for v in gold.values())} sections for {len(gold)} questions")
@@ -928,7 +931,7 @@ def main(argv=None):
     summary = {
         "description": "Section-level retrieval metrics; gold labels agent-drafted, not human-verified.",
         "config": {"md": [os.path.basename(p) for p in args.md], "questions": os.path.basename(args.questions),
-                   "gold": os.path.basename(args.gold), "k": args.k, "ndcg_k": args.ndcg_k,
+                   "gold": os.path.basename(args.gold) if args.gold else "inline", "k": args.k, "ndcg_k": args.ndcg_k,
                    "mrr_depth": args.mrr_depth, "proxy_mode": args.proxy_mode,
                    "chunk_size": args.chunk_size, "overlap": args.overlap,
                    "flat_context_chunks": args.flat_context_chunks, "context_cap": args.context_cap,
