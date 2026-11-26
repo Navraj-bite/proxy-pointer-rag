@@ -14,7 +14,11 @@ published 0.4895 / 0.5079 reproduce, and checks whether the adapter_w1repro
 arm reproduces finetuned_outputs.csv verbatim.
 
 Writes (cwd = private run dir; ids + numbers only, no text):
-  gemma_arms_scores.csv, gemma_arms_summary.json
+  <out-prefix>_scores.csv, <out-prefix>_summary.json  (default prefix gemma_arms)
+
+v2 / subsets:
+  --prompts evaluation_prompts_v2.jsonl --suffix _v2 --out-prefix gemma_arms_v2 --no-week1
+  --ids 1,2,4 --out-prefix gemma_arms_seen --no-week1   (score a subset of a run)
 Prints a markdown report to stdout.
 """
 import argparse
@@ -100,19 +104,27 @@ def week1_rescore(prompts, embedder):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default=",".join(ARM_ORDER))
+    ap.add_argument("--prompts", default=PROMPTS_FILE)
+    ap.add_argument("--suffix", default="", help="answer files are gemma_arm_<arm><suffix>.jsonl")
+    ap.add_argument("--ids", default=None, help="comma list: score only these eval ids")
+    ap.add_argument("--out-prefix", default="gemma_arms")
+    ap.add_argument("--no-week1", action="store_true", help="skip the Week 1 CSV re-score")
     args = ap.parse_args()
 
     from sentence_transformers import SentenceTransformer
     embedder = SentenceTransformer(EMBED_MODEL)
-    prompts = load_jsonl(PROMPTS_FILE)
+    prompts = load_jsonl(args.prompts)
+    if args.ids:
+        keep = {int(x) for x in args.ids.split(",")}
+        prompts = [p for p in prompts if p["id"] in keep]
     by_id = {p["id"]: p for p in prompts}
 
     answers, meta = {}, {}
     for arm in [a for a in args.arms.split(",") if a]:
-        path = f"gemma_arm_{arm}.jsonl"
+        path = f"gemma_arm_{arm}{args.suffix}.jsonl"
         if not os.path.exists(path):
             continue
-        recs = {r["id"]: r for r in load_jsonl(path)}
+        recs = {r["id"]: r for r in load_jsonl(path) if r["id"] in by_id}
         if set(recs) != set(by_id):
             print(f"[skip] {arm}: {len(recs)}/{len(by_id)} answers")
             continue
@@ -154,10 +166,15 @@ def main():
             summary["pairs"].append(pair_stats(df, a, b))
 
     # Leakage / provenance subsets
-    subsets = {"ids_1_20": df.id <= 20, "ids_21_40": df.id > 20}
-    if os.path.exists("leakage_per_item.csv"):
-        lk = pd.read_csv("leakage_per_item.csv")
-        lk = lk[lk.set == "current"].set_index("eval_id").loc[df.id]
+    if df.id.max() > 100:  # v2 numbering: <=40 kept from v1, >100 new
+        subsets = {"kept_v1_items": df.id <= 40, "new_items": df.id > 100}
+    else:
+        subsets = {"ids_1_20": df.id <= 20, "ids_21_40": df.id > 20}
+    lk = pd.read_csv("leakage_per_item.csv") if os.path.exists("leakage_per_item.csv") else None
+    if lk is not None:
+        lk = lk[lk.set == "current"].set_index("eval_id")
+    if lk is not None and args.prompts == PROMPTS_FILE and set(df.id) <= set(lk.index) and len(df) > 20:
+        lk = lk.loc[df.id]
         near = ((lk.max_cos_instruction > 0.9) | (lk.max_cos_reference > 0.9)).to_numpy()
         clean = ((lk.max_cos_instruction <= 0.8) & (lk.max_cos_reference <= 0.8)).to_numpy()
         subsets["near_dup_cos_gt_0.9"] = pd.Series(near, index=df.index)
@@ -168,10 +185,11 @@ def main():
         summary["subsets"][name] = {
             "ids": [int(x) for x in sub.id],
             "means": {a: float(sub[a].mean()) for a in main_arms},
-            "pairs": [pair_stats(sub, a, b) for a, b in PAIRS[:3] if a in sub and b in sub],
+            "pairs": [pair_stats(sub, a, b) for a, b in PAIRS[:3] + [PAIRS[4]]
+                      if a in sub and b in sub],
         }
 
-    w1 = week1_rescore(prompts, embedder)
+    w1 = None if args.no_week1 else week1_rescore(prompts, embedder)
     if w1:
         w1df, summary["week1_rescore"] = w1
         df = df.merge(w1df, on="id")
@@ -183,8 +201,9 @@ def main():
                        for i in by_id)
             summary["week1_rescore"]["adapter_w1repro_verbatim_matches_finetuned_csv"] = int(same)
 
-    df.to_csv("gemma_arms_scores.csv", index=False)
-    with open("gemma_arms_summary.json", "w") as f:
+    summary["prompts_file"], summary["suffix"], summary["n"] = args.prompts, args.suffix, len(df)
+    df.to_csv(f"{args.out_prefix}_scores.csv", index=False)
+    with open(f"{args.out_prefix}_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     # ---- markdown report

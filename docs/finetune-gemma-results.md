@@ -1,6 +1,7 @@
 # Fine-tune vs RAG, re-run Gemma-vs-Gemma
 
-_Task 5 of the evaluation-hardening plan, run 2026-11-25. Scripts: `leakage_check.py`,
+_Task 5 of the evaluation-hardening plan. v1 run 2026-11-25; de-leaked v2 run 2026-11-26
+([v2 section](#v2-de-leaked-eval-set-primary-result)). Scripts: `leakage_check.py`,
 `run_gemma_arms.py`, `score_gemma_arms.py`. This page reports aggregates and question ids
 only. The generated answers, per-item CSVs and logs live in the private run directory, because
 they quote the proprietary manuals._
@@ -26,9 +27,19 @@ they quote the proprietary manuals._
   22/40 wins. The largest difference from `comparison.csv` is 8e-17. Even in Week 1, the delta's
   CI crossed zero (+0.018, CI −0.046 to +0.082).
 
-**Bottom line:** the TinyLlama-era statement "the fine-tune beat RAG" does not survive. Gemma
-against Gemma, no arm is separable from another at n=40 with this metric. The adapter's point
-estimate leads, but that lead sits almost entirely on items it was effectively trained on.
+**Bottom line (v1):** the TinyLlama-era statement "the fine-tune beat RAG" does not survive.
+Gemma against Gemma, no arm is separable from another at n=40 with this metric. The adapter's
+point estimate leads, but that lead sits almost entirely on items it was effectively trained on.
+
+**Update: v2, the de-leaked eval set, is now the primary result.** v2 has 40 items, and every one
+passes a train-overlap gate. On v2:
+
+- **Adapter and flat RAG tie:** adapter − RAG is −0.000, CI [−0.076, +0.080].
+- **Adapter vs base is a borderline gain:** adapter − base is +0.025, CI [−0.000, +0.050], with
+  29 wins and 11 losses. This is a small, consistent edge whose CI just touches zero.
+- **RAG vs base is not separable:** +0.026, CI [−0.050, +0.096].
+
+The v1 lead of the fine-tune over RAG (+0.056) was entirely a leakage effect.
 
 ## Setup
 
@@ -175,6 +186,162 @@ The defensible statement is that at n=40, on this metric, base Gemma, Gemma+LoRA
 RAG perform about the same, and the eval set needs to be de-leaked before any of them can be
 ranked.
 
+## v2: de-leaked eval set (primary result)
+
+_Run 2026-11-26 at commit `7848d72`. Settings are identical to v1: fp32, MPS, greedy,
+`max_new_tokens=256`, seed 0, flat top-4 retriever, same prompts and chat template. The eval set
+`evaluation_prompts_v2.jsonl`, its key-term file and the review sheet are corpus-derived and live
+only in the private run dir. This section names ids, not questions._
+
+### How v2 was built
+
+**The gate** (`leakage_check.py --gate --prompts … --keyterms …`, which exits 1 on any failure).
+For every v2 item:
+
+- its instruction and its reference answer each have max MiniLM cosine **< 0.8** against
+  **every** training instruction **and** every training output, in both `train.jsonl` and
+  `train.jsonl.bak` (204 rows);
+- none of its declared key terms (parameter names, numbers, distinctive manual terms; one or two
+  per item) occurs in any training output, by case-insensitive substring search;
+- no other v2 item has instruction or reference cosine ≥ 0.85 with it.
+
+**Final gate result: 40/40 pass.**
+
+| Gate measure | Max over v2 items |
+|---|---|
+| Train cosine, instruction | 0.776 |
+| Train cosine, reference | 0.791 |
+| Intra-set cosine, instruction | 0.838 |
+| Intra-set cosine, reference | 0.734 |
+
+**What was kept.** The plan was to keep all 15 "clean" v1 items (19, 21, 25–28, 31–34, 36–40)
+unchanged. **Only 10 survive** the stricter gate: 25, 26, 27, 28, 31, 33, 34, 37, 38, 39. They keep
+their v1 ids. Five fail the key-term check, because the fact they test is in the SFT data even
+though the wording differs:
+
+| Id | Why it fails |
+|---|---|
+| 19 | its remedy appears in a trained fault-code row |
+| 21 | the same fact as id 1 (trained) |
+| 32 | the fact appears in a trained HMI row |
+| 36 | the named test appears in a trained output |
+| 40 | its key phrase is a substring of a trained output |
+
+**Borderline items.** All nine (3, 5, 16, 18, 23, 24, 29, 30, 35) fail the cosine gate; their max
+train cosine is 0.80–0.90. None is kept.
+
+**What was replaced.** The 16 near-duplicates, the 9 borderline items and the 5 key-term failures,
+30 items in all, were replaced by new questions with ids 101–135, so v1 and v2 answers cannot be
+confused. Each new question:
+
+- asks about a fact from the operator manual that `train.jsonl` does not cover;
+- is answerable from one manual section;
+- has a reference answer written from that section. The builder checks that a supporting excerpt
+  is a literal substring of the manual text.
+
+Four of the first 30 drafts (105, 120, 122, 128) and one reserve (132) failed the gate: 120 and
+128 on cosine, 105, 122 and 132 on key terms. They were swapped for other reserves.
+
+**Topic mix.** v2 has 20 troubleshooting / "something went wrong" items, 10 procedures, 6
+screens/navigation and 4 parameters. v1 was more alarm-heavy (about 27 alarm items). The
+troubleshooting manual's alarm list is fully covered by the SFT data, so the new troubleshooting
+items come from operator-manual situations instead, such as unexpected screen states,
+zeroing and calibration problems, and test or backup failures.
+
+**Reference length.** New references average 19 words. The 10 kept v1 items average 7 words, so
+the v2 mean is 16 words, against 23 for v1. The SFT data's newer rows share this terse register,
+which favours the adapter under a cosine-to-reference metric. The style bias is still present in
+v2; only the fact overlap was removed.
+
+**Review sheet.** `eval_v2_review_sheet.csv` lists each item's question, reference, source
+heading, supporting excerpt, key terms, max train cosine, and a blank `ok` column for hand-checking.
+It has not been hand-checked yet. Two of the kept v1 items (37 and 39) have no verbatim support in
+the manual for their reference wording, and they were kept unchanged as instructed.
+
+**Answer reuse.** For the 10 kept items, v1 answers were reused only after the runner confirmed
+that the rendered token ids were byte-identical to the v1 run (`--reuse-from ''`). A fresh
+regeneration of one kept item reproduced the v1 answer exactly in both the base and RAG arms.
+Only the 30 new items were generated: 120 generations across the four arms.
+
+### v2 results (n = 40, all gate-clean)
+
+| Arm | Mean cosine | Median | Wins (best of 4) | Hit 256-token cap | Mean words | Abstentions |
+|---|---|---|---|---|---|---|
+| base Gemma | 0.4846 | 0.5105 | 5/40 | 38/40 | 167 | 0 |
+| base + adapter | 0.5099 | 0.5389 | 11/40 | 30/40 | 156 | 0 |
+| RAG + base Gemma | **0.5102** | **0.5525** | **15/40** | 0/40 | 14 | 6 |
+| RAG + adapter | 0.4450 | 0.4675 | 7/40 | 0/40 | 13 | 10 |
+
+The "wins" count questions where the arm beat the other three. Two questions had ties at the top,
+so wins sum to 38.
+
+| Paired delta | n | Mean Δ | 95% CI (paired bootstrap, 10k, seed 20261125) | W/L/T |
+|---|---|---|---|---|
+| **adapter − base** | 40 | +0.0253 | [−0.0002, +0.0504] | 29/11/0 |
+| **adapter − RAG** | 40 | −0.0003 | [−0.0760, +0.0800] | 18/22/0 |
+| **RAG − base** | 40 | +0.0256 | [−0.0501, +0.0962] | 23/17/0 |
+| **RAG+adapter − base** | 40 | −0.0396 | [−0.1247, +0.0411] | 20/20/0 |
+| RAG+adapter − RAG | 40 | −0.0652 | [−0.1385, +0.0043] | 9/23/8 |
+
+Split by provenance:
+
+| Subset | n | base | adapter | RAG | adapter − base [CI] | adapter − RAG [CI] | RAG − base [CI] |
+|---|---|---|---|---|---|---|---|
+| new items (101–135) | 30 | 0.499 | 0.528 | 0.543 | +0.029 [−0.003, +0.060] | −0.015 [−0.102, +0.080] | +0.044 [−0.045, +0.125] |
+| kept v1 items | 10 | 0.443 | 0.456 | 0.413 | +0.013 [−0.018, +0.043] | +0.042 [−0.108, +0.210] | −0.030 [−0.177, +0.109] |
+
+Context for the new items:
+
+- **Retrieval coverage.** The flat retriever returned a chunk containing one of the item's key
+  terms for 25 of 30 new items. RAG averages 0.555 on those 25 and 0.480 on the other 5.
+- **Length does not explain the adapter's edge here.** In v1, the adapter − base delta correlated
+  with answer-length difference (r = −0.38). In v2 the correlation is r = +0.08, so the small edge
+  is not explained by shorter answers. With this metric it is still impossible to tell domain
+  vocabulary and register apart from correct content.
+
+### Seen-in-training subset (secondary)
+
+This subset is the 16 v1 near-duplicates (1, 2, 4, 6–15, 17, 20, 22), scored from the v1 answers.
+These are facts the adapter trained on, reworded.
+
+| Arm | Mean | Median | Wins (best of 4) |
+|---|---|---|---|
+| base | 0.5374 | 0.5286 | 4/16 |
+| adapter | **0.5772** | **0.5958** | **9/16** |
+| RAG | 0.4473 | 0.4429 | 1/16 |
+| RAG + adapter | 0.4160 | 0.3832 | 2/16 |
+
+| Paired delta | n | Mean Δ | 95% CI | W/L/T |
+|---|---|---|---|---|
+| adapter − base | 16 | +0.0399 | [−0.0148, +0.0920] | 9/7/0 |
+| adapter − RAG | 16 | +0.1299 | [+0.0424, +0.2247] | 13/3/0 |
+| RAG − base | 16 | −0.0901 | [−0.1867, +0.0004] | 5/11/0 |
+| RAG+adapter − base | 16 | −0.1213 | [−0.2186, −0.0247] | 4/12/0 |
+
+On trained facts, the adapter clearly beats flat RAG. Against base, its gain (+0.040) is larger
+than on clean items (+0.025), but still not significant at n=16. Recall of trained material is
+modest, and the large adapter − RAG gap here comes mostly from RAG doing badly on these
+long-reference alarm items: −0.090 vs base.
+
+### What changed vs v1
+
+| Comparison | v1 (40, leaked) | v2 (40, clean) | Seen subset (16) |
+|---|---|---|---|
+| adapter − base | +0.022 [−0.009, +0.052] | +0.025 [−0.000, +0.050] | +0.040 [−0.015, +0.092] |
+| adapter − RAG | +0.056 [−0.012, +0.125] | **−0.000 [−0.076, +0.080]** | +0.130 [+0.042, +0.225] |
+| RAG − base | −0.034 [−0.098, +0.027] | +0.026 [−0.050, +0.096] | −0.090 [−0.187, +0.000] |
+| RAG+adapter − base | −0.083 [−0.153, −0.016] | −0.040 [−0.125, +0.041] | −0.121 [−0.219, −0.025] |
+
+1. **Fine-tune vs RAG.** The v1 point-estimate lead disappears on clean items. They tie, and RAG
+   has the higher median and more wins. The v1 lead was a leakage effect.
+2. **Fine-tune vs base.** The adapter's small edge over the untuned model holds on clean items
+   (+0.025, 29/40 wins), but the CI's lower bound is −0.0002. Call it borderline, not
+   established. It may reflect domain register rather than knowledge.
+3. **RAG + adapter** is still the worst arm, though on v2 its gap to base is no longer
+   significant.
+4. **The Week 1 conclusion stays struck.** No arm is significantly better than another on the
+   clean set at n=40 with this metric.
+
 ## Why the metric is weak here
 
 - **It conflates retrieval with fluency and length.** Base Gemma writes 173-word generic answers
@@ -209,6 +376,17 @@ Model load took about 3 s from the local cache. Memory, on Apple unified memory:
 
 Neither figure is VRAM.
 
+v2 run, generating 30 new items per arm with 10 reused:
+
+| Arm | Wall time |
+|---|---|
+| base | 443.0 s |
+| adapter | 501.5 s |
+| RAG | 54.7 s |
+| RAG + adapter | 52.4 s |
+
+Peak MPS driver-allocated memory was 5.34 GB and peak process RSS was 1.14 GB.
+
 ## Reproduce
 
 ```
@@ -219,6 +397,17 @@ HF_HUB_OFFLINE=1 python3 <repo>/run_gemma_arms.py \
     --arms base,adapter,rag,rag_adapter,adapter_w1repro --device mps --dtype fp32 \
     --max-new-tokens 256 --seed 0
 HF_HUB_OFFLINE=1 python3 <repo>/score_gemma_arms.py
+
+# v2 (de-leaked set; evaluation_prompts_v2.jsonl + key terms built privately)
+HF_HUB_OFFLINE=1 python3 <repo>/leakage_check.py --gate --prompts evaluation_prompts_v2.jsonl \
+    --keyterms evaluation_prompts_v2_keyterms.json            # exit 1 = gate failure
+HF_HUB_OFFLINE=1 python3 <repo>/run_gemma_arms.py --arms base,adapter,rag,rag_adapter \
+    --prompts evaluation_prompts_v2.jsonl --suffix _v2 --reuse-from '' \
+    --device mps --dtype fp32 --max-new-tokens 256 --seed 0
+HF_HUB_OFFLINE=1 python3 <repo>/score_gemma_arms.py --arms base,adapter,rag,rag_adapter \
+    --prompts evaluation_prompts_v2.jsonl --suffix _v2 --out-prefix gemma_arms_v2 --no-week1
+HF_HUB_OFFLINE=1 python3 <repo>/score_gemma_arms.py --arms base,adapter,rag,rag_adapter \
+    --ids 1,2,4,6,7,8,9,10,11,12,13,14,15,17,20,22 --out-prefix gemma_arms_seen --no-week1
 ```
 
 `run_gemma_arms.py` appends and fsyncs each answer as it is produced, and skips ids already
