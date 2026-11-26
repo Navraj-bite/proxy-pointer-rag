@@ -9,7 +9,7 @@ weakness 3), so routing and retrieval were confounded. This page measures them s
 1. **Router accuracy** on its own, against hand labels and against a category oracle.
 2. **A routing × retrieval 2×2 at retrieval level**, on both corpora.
 3. **The same 2×2 at answer level** on the private corpus, with every generation setting held
-   equal across cells.
+   equal across cells (section 3).
 
 Public-corpus numbers reproduce from a clean clone:
 
@@ -251,15 +251,52 @@ Restricted to deep-routed questions:
   −0.017 [−0.073, +0.040], and on oracle-routed questions it is +0.013 [−0.048, +0.073]. The
   per-row context-rule tables are in `artifacts/public/task6/router_eval_tables.md`.
 
-## 3. Answer-level 2×2 (private): not finished
+## 3. Answer-level 2×2 (private)
 
-The generations are set up but not yet scored. Setup: TinyLlama-1.1B-Chat, one prompt template
-for every cell, the same 1,200-char context cap, `max_new_tokens=200`, greedy decoding.
-Fast-routed answers are reused across the router cells, which comes to 79 generations
-(`router_eval.py contexts | generate | answers`). The generation run was still in progress when
-this page was written, so no answer-level numbers are reported yet. An uncapped run isn't
-possible with TinyLlama: two proxy contexts (3,757 and 3,212 tokens) exceed its 2,048-token
-window.
+**(private, n = 30.)** All four cells use one setup: TinyLlama-1.1B-Chat, one prompt template,
+the same 1,200-char context cap, `max_new_tokens=200`, greedy decoding. Flat context = top-4
+flat_md chunks; proxy context = top-1 node + direct children. Fast-routed questions get the bare
+LLM answer, reused across the router cells (79 generations total; `router_eval.py contexts |
+generate | answers`). Score = cosine(MiniLM(answer), MiniLM(reference)), the published metric,
+with all its weaknesses ([`metrics.md`](metrics.md)). Paired bootstrap, 10k resamples, seed 0;
+✱ = CI excludes zero.
+
+| Routing | Flat 500/50 | Proxy-pointer | Proxy − flat [95% CI] |
+|---|---|---|---|
+| Always retrieve | **0.701** | 0.652 | −0.049 [−0.096, −0.002] ✱ |
+| Regex router | 0.675 | 0.668 | −0.007 [−0.039, +0.023] |
+| Oracle router (hand labels) | 0.701 | 0.672 | −0.029 [−0.073, +0.014] |
+
+| Router − always retrieve | Flat | Proxy-pointer |
+|---|---|---|
+| Regex router | −0.026 [−0.064, +0.009] | +0.015 [−0.014, +0.047] |
+| Oracle router | −0.000 [−0.023, +0.021] | +0.020 [−0.001, +0.045] |
+
+**Does the fast route help?** We compare answers on exactly the questions each router skips:
+
+| Skipped questions | n | Bare LLM | Flat | Proxy-pointer | Bare − flat | Bare − proxy |
+|---|---|---|---|---|---|---|
+| Regex router's fast set | 18 | 0.716 | 0.760 | 0.691 | −0.044 [−0.106, +0.017] | +0.026 [−0.027, +0.077] |
+| Oracle's fast set | 11 | 0.753 | 0.754 | 0.699 | −0.001 [−0.064, +0.059] | +0.054 [−0.004, +0.114] |
+
+What this shows:
+
+- **With no router, proxy-pointer answers are worse than flat answers** (−0.049, CI excludes 0),
+  consistent with the retrieval-level result.
+- **Adding the regex router closes that gap to −0.007.** It does this by replacing proxy-pointer
+  retrieval with *no* retrieval on 18 questions. On those questions the bare LLM scores slightly
+  above proxy-pointer context, and below flat context. So the router helps proxy-pointer only
+  because proxy-pointer's context is, on those questions, no better than nothing; with flat
+  retrieval the router costs −0.026. This is the mechanism behind the published "hybrid ≈
+  vanilla" result.
+- **No answer-level routing effect is significant.** Under this metric and generator, skipping
+  retrieval neither clearly helps nor clearly hurts answer quality. Its only demonstrated
+  benefit would be latency, and [`latency-memory.md`](latency-memory.md) shows retrieval costs
+  ~3.5 ms against ~12 s of generation, so even that is negligible.
+- **Answer to the plan's question.** The published hybrid's behaviour is mostly routing: the
+  router decides whether there is any context at all for 60% of questions. And the routing
+  decision happened to hide proxy-pointer's weakness. Proxy-pointer retrieval itself is the
+  worse retriever in every cell, at both retrieval and answer level.
 
 ## Limitations
 
