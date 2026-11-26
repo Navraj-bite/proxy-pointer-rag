@@ -73,25 +73,43 @@ at `chunk_size=500 / overlap=50`, top-k 4, stuffed into a grounded prompt.
 
 ## The fine-tuning arm
 
-`finetune.py` QLoRA-tunes `google/gemma-3-1b-it` on instruction/output pairs synthesized from
-the same corpus — 4-bit NF4, bf16 compute, LoRA `r=8` / `alpha=16` on `q_proj` and `v_proj`,
+`finetune.py` LoRA-tunes `google/gemma-3-1b-it` on instruction/output pairs synthesized from
+the same corpus. Its CUDA path is QLoRA (4-bit NF4, bf16 compute); LoRA `r=8` / `alpha=16` on `q_proj` and `v_proj`,
 dropout 0.05, 3 epochs at `lr=2e-4`, max length 512. It is MPS-aware: it attempts local
 training on Apple Silicon and, on the expected MPS kernel failure, auto-generates a Colab
 notebook targeting a free T4, because the 4-bit stack is CUDA-bound.
 
-Over 40 evaluation questions the fine-tune scored a mean cosine of 0.5079 against RAG's 0.4895
-(22/40 head-to-head wins) — not significant (sign test p = 0.64). That arm used Gemma-3-1b +
-adapter with no retrieval, against TinyLlama + RAG, so it isn't a like-for-like comparison. 27/40
-fine-tune answers exceed MiniLM's 256-token input limit (only their opening is scored), and 15 of
-the first 20 evaluation prompts have near-duplicates in the training set.
+Re-run Gemma-vs-Gemma ([`run_gemma_arms.py`](run_gemma_arms.py),
+[`docs/finetune-gemma-results.md`](docs/finetune-gemma-results.md)), over the same 40 evaluation
+questions:
+
+| Arm (all `gemma-3-1b-it`, greedy, 256 new tokens) | Mean cosine | Median |
+|---|---|---|
+| base | 0.498 | 0.508 |
+| base + adapter | **0.520** | 0.549 |
+| flat RAG (top-4) + base | 0.464 | 0.492 |
+
+**None of these gaps is significant at n = 40.** Adapter − base is +0.022, 95% CI [−0.009, +0.052];
+adapter − RAG is +0.056 [−0.012, +0.125]. The adapter's lead is concentrated on evaluation
+questions that paraphrase its training data (ids 1–20). On the 15 items with no near-duplicate in
+the training set, it scores slightly *below* the base model. The original Week 1 figures (0.5079 vs
+0.4895, 22/40 wins) compared Gemma + adapter against a **TinyLlama**-generated RAG arm, and their CI
+also crossed zero. Read this as "no measurable difference yet; the eval set needs de-leaking",
+not as a win for fine-tuning.
+
+The shipped adapter's `training_args.bin` records an MPS device with bf16 off. 4-bit
+bitsandbytes doesn't run on MPS, so the adapter was most likely trained with `finetune.py`'s
+non-quantized LoRA path, not 4-bit QLoRA.
 
 ## Honest caveats
 
-- **The generator is a stand-in.** `gemma-3-1b-it` is gated on Hugging Face and the evaluation
-  environment had no HF auth, so every RAG/router answer was generated with `TinyLlama-1.1B-Chat`; the Week 1
-  fine-tune arm used Gemma-3-1b + LoRA.
-  The retrieval and routing logic is what's being measured; absolute answer quality is not.
-  Swap `_GEN_MODEL` / `_USE_ADAPTER` in `hybrid_intent_router.py` once you have auth.
+- **Week 2 still uses a stand-in generator.** The Week 2 proxy-pointer vs vanilla benchmark was
+  generated with `TinyLlama-1.1B-Chat`, so those scores measure retrieval and routing mixed with a
+  weak generator, not answer quality. The Week 1 fine-tuning comparison has been re-run
+  Gemma-vs-Gemma (above).
+- **The fine-tune eval set overlaps the SFT data.** Eval ids 1–20 are paraphrases of training rows
+  0–19 (15/20 have instruction cosine > 0.9), which inflates any fine-tuned arm. See the leakage
+  section of [`docs/finetune-gemma-results.md`](docs/finetune-gemma-results.md).
 - **No training curve was captured.** The LoRA adapter exists as proof training ran, but no
   loss trace or notebook output was saved. See `docs/week1-training-evidence.md`.
 - **Week 1 recorded no latency.** Only Week 2 has per-question timings. Not estimated.
