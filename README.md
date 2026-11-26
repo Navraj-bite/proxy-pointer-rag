@@ -11,10 +11,35 @@ retrieval returns a complete section, tables included, instead of a 500-characte
 
 ## Results
 
-### Retrieval (primary metric)
+### Retrieval on a public corpus (primary, reproducible)
+
+252 questions over a pinned subset of the PX4 User Guide (CC BY 4.0), reproducible from a clean
+clone (see [Reproduce on a public corpus](#reproduce-on-a-public-corpus)). Questions:
+tabular 58 / procedure 64 / navigation 77 / multi-hop 53. Gold section labels were LLM-drafted
+and independently LLM-verified; a human spot-check is pending. `all-MiniLM-L6-v2`, FAISS
+`IndexFlatIP`, no router, no generator. Full method and per-category tables:
+[`docs/evaluation-set.md`](docs/evaluation-set.md).
+
+| Metric (section-level) | Flat 500/50 chunks | Proxy-pointer | Δ [95% CI] |
+|---|---|---|---|
+| Recall@1 | **0.48** | 0.40 | |
+| Recall@5 | **0.82** | 0.64 | -0.175 [-0.238, -0.111] ✱ |
+| MRR | **0.62** | 0.51 | -0.110 [-0.165, -0.055] ✱ |
+| MRR, counting node + children delivered | 0.62 | 0.60 | -0.017 [-0.073, +0.037] |
+| Multi-hop, all parts in top 5 (delivered) | 0.40 | 0.42 | +0.019 [-0.132, +0.170] |
+
+✱ = 95% paired-bootstrap CI excludes zero. **Proxy-pointer ranks the right section worse than
+flat chunking**, in every category (tables worst: R@5 0.76 vs 0.53). Counting what
+the pointer actually delivers (the hit node plus its children), the MRR gap disappears, and
+multi-hop (where whole-section retrieval was expected to win biggest) is a tie. The pointer
+idea works; the proxy (heading + first body line) is the weak link. That is what the proxy-size
+sweep tests next.
+
+### Retrieval on the original private corpus
 
 30 categorized questions over two industrial equipment manuals (private corpus — these numbers
-cannot yet be regenerated from a clean clone; a public-corpus reproduction is in progress).
+cannot be regenerated from a clean clone; the public-corpus results above are the reproducible
+counterpart, and they agree).
 `all-MiniLM-L6-v2`, FAISS `IndexFlatIP`, no router, no generator. Each system returns a ranked
 list of sections, scored against gold section labels, which are **agent-drafted and not yet
 human-verified**. Method: [`docs/retrieval-metrics.md`](docs/retrieval-metrics.md).
