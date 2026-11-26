@@ -1,0 +1,241 @@
+{
+ "mode": "build",
+ "env": {
+  "date": "2026-11-26T05:48:53-05:00",
+  "python": "3.9.6",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "cpu": "Apple M4",
+  "cpu_count": 10,
+  "devices": {
+   "embedder": "cpu"
+  },
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null,
+   "TOKENIZERS_PARALLELISM": null,
+   "torch_num_threads": 4,
+   "torch_num_interop_threads": 10,
+   "faiss_omp_max_threads": 10
+  },
+  "HF_HUB_OFFLINE": "1",
+  "models": {
+   "sentence-transformers/all-MiniLM-L6-v2": {
+    "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+   }
+  },
+  "seed": 0,
+  "libraries": {
+   "torch": "2.8.0",
+   "transformers": "4.57.6",
+   "sentence-transformers": "5.1.2",
+   "faiss-cpu": "1.13.0",
+   "numpy": "2.0.2",
+   "langchain-text-splitters": "0.3.11",
+   "pypdf": "6.13.1",
+   "tokenizers": "0.22.2"
+  },
+  "git_commit": "9ac223ecb6e3e768071e487749ee6ec197072595",
+  "git_dirty": true,
+  "corpus": "public",
+  "loadavg_start": null,
+  "machine_idle": false,
+  "machine_note": "other agents were doing light file reading/grep during the run",
+  "corpus_commit": "d6f12ad1c4f70ad3230afd7d86e971421e02fef4",
+  "corpus_markdown_sha256": "6af1f53478c86ee24797a87565d70debd39788f81b656575640a1a4ebd860d95",
+  "loadavg_end": [
+   2.79443359375,
+   2.58935546875,
+   2.8603515625
+  ],
+  "loadavg_note": "loadavg_start was not captured at process start in this run (script bug, since fixed); loadavg_end is at the end of the run"
+ },
+ "config": {
+  "repeats": 3,
+  "flat_source": "markdown",
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "encode_batch_size": 32,
+  "note": "embedder load timed separately; repeat 1 includes cold file cache"
+ },
+ "embedder_load_ms": 66.63491700000002,
+ "summary_ms": {
+  "proxy_pointer": {
+   "tree_build": {
+    "n": 3,
+    "mean": 4.134722000000757,
+    "p50": 4.015041000002384,
+    "p95": 4.446891600000047,
+    "min": 3.894250000000099,
+    "max": 4.494874999999787
+   },
+   "proxy_texts": {
+    "n": 3,
+    "mean": 1.154152999999436,
+    "p50": 1.1450419999992079,
+    "p95": 1.1903795000002493,
+    "min": 1.1219999999987351,
+    "max": 1.195417000000365
+   },
+   "embed": {
+    "n": 3,
+    "mean": 918.4469996666675,
+    "p50": 701.090875000002,
+    "p95": 1289.4063993999998,
+    "min": 699.4753330000005,
+    "max": 1354.7747909999996
+   },
+   "faiss_add": {
+    "n": 3,
+    "mean": 0.0737499999997245,
+    "p50": 0.04133300000042084,
+    "p95": 0.13253360000042846,
+    "min": 0.037249999998323347,
+    "max": 0.1426670000004293
+   },
+   "write": {
+    "n": 3,
+    "mean": 1.9036249999994463,
+    "p50": 1.7384580000001648,
+    "p95": 2.5411085999992977,
+    "min": 1.3421249999989726,
+    "max": 2.6302919999992014
+   },
+   "total": {
+    "n": 3,
+    "mean": 925.7132496666667,
+    "p50": 708.8954580000006,
+    "p95": 1297.0011330000004,
+    "min": 705.8980829999992,
+    "max": 1362.3462080000004
+   },
+   "disk_bytes": {
+    "pp_faiss.index": 1004589,
+    "pp_metadata.pkl": 52792,
+    "pp_tree.pkl": 553439
+   },
+   "disk_bytes_total": 1610820,
+   "vectors": 654,
+   "dim": 384,
+   "tree_nodes": 662
+  },
+  "flat": {
+   "load_source": {
+    "n": 3,
+    "mean": 0.3202496666660319,
+    "p50": 0.30041599999997004,
+    "p95": 0.3576416000002247,
+    "min": 0.29633299999787255,
+    "max": 0.364000000000253
+   },
+   "chunk": {
+    "n": 3,
+    "mean": 3.9008613333333386,
+    "p50": 3.8101250000011078,
+    "p95": 4.067637500000032,
+    "min": 3.7962089999989956,
+    "max": 4.0962499999999125
+   },
+   "embed": {
+    "n": 3,
+    "mean": 5767.683111000001,
+    "p50": 5442.766666,
+    "p95": 6358.3074538,
+    "min": 5400.248459,
+    "max": 6460.034208
+   },
+   "faiss_add": {
+    "n": 3,
+    "mean": 0.08519466666771318,
+    "p50": 0.08137500000060527,
+    "p95": 0.09457530000087644,
+    "min": 0.07816700000162768,
+    "max": 0.09604200000090657
+   },
+   "write": {
+    "n": 3,
+    "mean": 1.5936806666658754,
+    "p50": 1.7132919999980345,
+    "p95": 2.1851916999992227,
+    "min": 0.8301250000002369,
+    "max": 2.2376249999993547
+   },
+   "total": {
+    "n": 3,
+    "mean": 5773.583097333333,
+    "p50": 5448.65475,
+    "p95": 6363.744037500001,
+    "min": 5406.673916999999,
+    "max": 6465.420625000001
+   },
+   "disk_bytes": {
+    "faiss.index": 2185773,
+    "chunks.pkl": 528059
+   },
+   "disk_bytes_total": 2713832,
+   "vectors": 1423,
+   "dim": 384,
+   "source": "markdown",
+   "mean_chunk_chars": 365.40126493323964
+  }
+ },
+ "runs_s": {
+  "proxy_pointer": [
+   {
+    "tree_build": 0.004494874999999787,
+    "proxy_texts": 0.001195417000000365,
+    "embed": 1.3547747909999996,
+    "faiss_add": 0.0001426670000004293,
+    "write": 0.0017384580000001648,
+    "total": 1.3623462080000004
+   },
+   {
+    "tree_build": 0.003894250000000099,
+    "proxy_texts": 0.0011450419999992079,
+    "embed": 0.6994753330000005,
+    "faiss_add": 4.133300000042084e-05,
+    "write": 0.0013421249999989726,
+    "total": 0.7058980829999992
+   },
+   {
+    "tree_build": 0.004015041000002384,
+    "proxy_texts": 0.0011219999999987351,
+    "embed": 0.701090875000002,
+    "faiss_add": 3.7249999998323347e-05,
+    "write": 0.0026302919999992014,
+    "total": 0.7088954580000006
+   }
+  ],
+  "flat": [
+   {
+    "load_source": 0.000364000000000253,
+    "chunk": 0.0040962499999999125,
+    "embed": 6.460034208,
+    "faiss_add": 9.604200000090657e-05,
+    "write": 0.0008301250000002369,
+    "total": 6.465420625000001
+   },
+   {
+    "load_source": 0.00030041599999997004,
+    "chunk": 0.0037962089999989956,
+    "embed": 5.442766666000001,
+    "faiss_add": 7.816700000162768e-05,
+    "write": 0.0017132919999980345,
+    "total": 5.448654749999999
+   },
+   {
+    "load_source": 0.00029633299999787255,
+    "chunk": 0.0038101250000011078,
+    "embed": 5.400248459,
+    "faiss_add": 8.137500000060527e-05,
+    "write": 0.0022376249999993547,
+    "total": 5.406673916999999
+   }
+  ]
+ },
+ "memory": {
+  "peak_rss_bytes": 1101938688,
+  "mps": null,
+  "label": "unified-memory high-water mark / peak RSS (not VRAM)"
+ }
+}

@@ -42,3 +42,9 @@ venv/
 # public corpus (fetched by scripts/fetch_corpus.sh) and its derived indices
 corpus/
 artifacts/
+
+# latency/memory benchmark (benchmark_latency.py, colab/measure_vram.py):
+# private-corpus results stay outside the repo; a Colab adapter may be trained
+# on a user-supplied (possibly proprietary) train.jsonl
+results/latency/private*
+vram-gemma-adapter/
