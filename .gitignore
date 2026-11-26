@@ -38,3 +38,5 @@ gemma_arms_*.json
 leakage_per_item.csv
 leakage_report.json
 *.log
+gate_*.csv
+gemma_run_env*.json

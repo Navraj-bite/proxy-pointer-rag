@@ -15,6 +15,17 @@ private run dir anyway. Optionally also checks the *.bak (pre-revision) sets.
 
 Run from the private run dir:
     python3 /path/to/repo/leakage_check.py [--bak]
+
+Gate mode (for building a de-leaked eval set):
+    python3 /path/to/repo/leakage_check.py --gate --prompts evaluation_prompts_v2.jsonl \
+        --keyterms evaluation_prompts_v2_keyterms.json
+  Every item must satisfy, against every train file (train.jsonl and train.jsonl.bak):
+    - instruction and reference_answer each have max MiniLM cosine < 0.8 against
+      every train instruction AND every train output;
+    - none of its declared key terms (case-insensitive substring) occurs in any
+      train output (items with no declared key terms fail);
+    - no other eval item has instruction or reference cosine >= 0.85 with it.
+  Writes gate_<prompts stem>.csv (ids + numbers only); exits 1 if any item fails.
 """
 import argparse
 import json
@@ -128,13 +139,94 @@ def summarize(df):
     }
 
 
+GATE_TRAIN_COS = 0.8
+GATE_INTRA_COS = 0.85
+
+
+def gate(args):
+    from sentence_transformers import SentenceTransformer
+    embedder = SentenceTransformer(EMBED_MODEL)
+    evals = load_jsonl(args.prompts)
+    keyterms = {}
+    if args.keyterms:
+        with open(args.keyterms) as f:
+            keyterms = {int(k): v for k, v in json.load(f).items()}
+    train_files = [t for t in args.train_files.split(",") if os.path.exists(t)]
+    train = []
+    for t in train_files:
+        train.extend(load_jsonl(t))
+    t_text = [t["instruction"] for t in train] + [t["output"] for t in train]
+    t_out_lower = [t["output"].lower() for t in train]
+    t_ins_lower = [t["instruction"].lower() for t in train]
+
+    enc = lambda xs: embedder.encode(xs, normalize_embeddings=True, batch_size=64)
+    T = enc(t_text)
+    E_ins = enc([e["instruction"] for e in evals])
+    E_ref = enc([e["reference_answer"] for e in evals])
+    S_ins, S_ref = E_ins @ T.T, E_ref @ T.T
+    I_ins, I_ref = E_ins @ E_ins.T, E_ref @ E_ref.T
+    np.fill_diagonal(I_ins, -1)
+    np.fill_diagonal(I_ref, -1)
+    ids = [e["id"] for e in evals]
+
+    rows, n_fail = [], 0
+    for k, e in enumerate(evals):
+        terms = keyterms.get(e["id"], [])
+        out_hits = [t for t in terms if any(t.lower() in o for o in t_out_lower)]
+        ins_hits = [t for t in terms if any(t.lower() in o for o in t_ins_lower)]
+        intra = sorted({ids[j] for j in range(len(evals))
+                        if I_ins[k, j] >= GATE_INTRA_COS or I_ref[k, j] >= GATE_INTRA_COS})
+        reasons = []
+        if S_ins[k].max() >= GATE_TRAIN_COS:
+            reasons.append("instruction_cos")
+        if S_ref[k].max() >= GATE_TRAIN_COS:
+            reasons.append("reference_cos")
+        if not terms:
+            reasons.append("no_keyterms")
+        if out_hits:
+            reasons.append("keyterm_in_train_output")
+        if intra:
+            reasons.append("intra_set_dup")
+        n_fail += bool(reasons)
+        rows.append({
+            "id": e["id"],
+            "max_train_cos_instruction": round(float(S_ins[k].max()), 4),
+            "max_train_cos_reference": round(float(S_ref[k].max()), 4),
+            "max_intra_cos_instruction": round(float(I_ins[k].max()), 4),
+            "max_intra_cos_reference": round(float(I_ref[k].max()), 4),
+            "intra_dup_ids": ",".join(map(str, intra)),
+            "n_keyterms": len(terms),
+            "keyterms_in_train_output": len(out_hits),
+            "keyterms_in_train_instruction": len(ins_hits),
+            "pass": not reasons,
+            "fail_reasons": ";".join(reasons),
+        })
+    df = pd.DataFrame(rows)
+    stem = os.path.splitext(os.path.basename(args.prompts))[0]
+    df.to_csv(f"gate_{stem}.csv", index=False)
+    pd.set_option("display.width", 200)
+    print(df.drop(columns=["intra_dup_ids"]).to_string(index=False))
+    print(f"\ntrain files: {train_files} ({len(train)} rows)")
+    print(f"gate: {len(df) - n_fail}/{len(df)} pass; max train cos instr "
+          f"{df.max_train_cos_instruction.max():.4f}, ref {df.max_train_cos_reference.max():.4f}; "
+          f"max intra cos instr {df.max_intra_cos_instruction.max():.4f}, "
+          f"ref {df.max_intra_cos_reference.max():.4f}")
+    return 1 if n_fail else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--gate", action="store_true", help="run the de-leak gate (see docstring)")
+    ap.add_argument("--prompts", default="evaluation_prompts.jsonl", help="eval set for --gate")
+    ap.add_argument("--keyterms", default=None, help="JSON {id: [key terms]} for --gate")
+    ap.add_argument("--train-files", default="train.jsonl,train.jsonl.bak")
     ap.add_argument("--eval", default="evaluation_prompts.jsonl")
     ap.add_argument("--train", default="train.jsonl")
     ap.add_argument("--bak", action="store_true",
                     help="also compare the *.bak (pre-revision) sets")
     args = ap.parse_args()
+    if args.gate:
+        raise SystemExit(gate(args))
 
     from sentence_transformers import SentenceTransformer
     embedder = SentenceTransformer(EMBED_MODEL)

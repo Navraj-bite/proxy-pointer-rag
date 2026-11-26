@@ -78,7 +78,14 @@ def parse_args():
     ap.add_argument("--top-k", type=int, default=4)
     ap.add_argument("--context-chars", type=int, default=0,
                     help="truncate joined RAG context to N chars (0 = no truncation)")
-    ap.add_argument("--suffix", default="", help="output filename suffix, e.g. _sanity")
+    ap.add_argument("--suffix", default="", help="output filename suffix, e.g. _sanity, _v2")
+    ap.add_argument("--prompts", default=PROMPTS_FILE, help="eval set (JSONL: id, instruction, ...)")
+    ap.add_argument("--reuse-from", default=None, metavar="SUFFIX",
+                    help="copy an answer from gemma_arm_<arm><SUFFIX>.jsonl instead of generating "
+                         "it, but only when the token ids rendered for that id from "
+                         "--reuse-prompts are byte-identical to this run's (e.g. --reuse-from '')")
+    ap.add_argument("--reuse-prompts", default=PROMPTS_FILE,
+                    help="eval set the --reuse-from answers were generated from")
     return ap.parse_args()
 
 
@@ -129,18 +136,22 @@ def load_done(path):
     return done
 
 
-def load_env():
-    if os.path.exists(ENV_FILE):
-        with open(ENV_FILE) as f:
+def env_path(suffix):
+    return ENV_FILE.replace(".json", f"{suffix}.json")
+
+
+def load_env(suffix):
+    if os.path.exists(env_path(suffix)):
+        with open(env_path(suffix)) as f:
             return json.load(f)
     return {}
 
 
-def save_env(env):
-    tmp = ENV_FILE + ".tmp"
+def save_env(env, suffix):
+    tmp = env_path(suffix) + ".tmp"
     with open(tmp, "w") as f:
         json.dump(env, f, indent=2)
-    os.replace(tmp, ENV_FILE)
+    os.replace(tmp, env_path(suffix))
 
 
 def main():
@@ -165,7 +176,7 @@ def main():
     if device == "mps" and not torch.backends.mps.is_available():
         sys.exit("MPS requested but not available")
 
-    with open(PROMPTS_FILE) as f:
+    with open(args.prompts) as f:
         prompts = [json.loads(l) for l in f if l.strip()]
     if args.limit:
         prompts = prompts[: args.limit]
@@ -194,7 +205,7 @@ def main():
     print(f"  loaded in {time.time() - t_load:.1f}s", flush=True)
     eos_ids = [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<end_of_turn>")]
 
-    env = load_env()
+    env = load_env(args.suffix)
     env.update({
         "model_id": MODEL_ID,
         "model_revision": model_revision(),
@@ -213,9 +224,37 @@ def main():
         "machine": platform.machine(),
         "git_commit": git_commit(),
         "n_prompts": len(prompts),
+        "prompts_file": args.prompts,
+        "prompts_sha256": sha256(args.prompts),
     })
     env.setdefault("arms", {})
-    save_env(env)
+    save_env(env, args.suffix)
+
+    def render(arm, q):
+        """Exact model input for (arm, question): token ids + retrieval metadata."""
+        meta = {}
+        if arm in RAG_ARMS:
+            ids, scores, texts = retrieve(q)
+            context = CHUNK_SEP.join(texts)
+            if args.context_chars:
+                context = context[: args.context_chars]
+            user = RAG_TEMPLATE.format(context=context, question=q)
+            meta = {"chunk_ids": ids, "chunk_scores": scores, "context_chars": len(context)}
+        else:
+            user = q
+        messages = [{"role": "user", "content": user}]
+        if arm == "adapter_w1repro":
+            s = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            input_ids = tokenizer(s, return_tensors="pt")["input_ids"]
+        else:
+            input_ids = tokenizer.apply_chat_template(
+                messages, add_generation_prompt=True, return_tensors="pt")
+        return input_ids, meta
+
+    reuse_q = {}
+    if args.reuse_from is not None:
+        with open(args.reuse_prompts) as f:
+            reuse_q = {r["id"]: r["instruction"] for r in map(json.loads, filter(str.strip, f))}
 
     adapter_loaded = False
     mps_hw = 0
@@ -236,30 +275,35 @@ def main():
         if not todo:
             continue
 
+        reuse_recs = {}
+        if args.reuse_from is not None and os.path.exists(f"gemma_arm_{arm}{args.reuse_from}.jsonl"):
+            with open(f"gemma_arm_{arm}{args.reuse_from}.jsonl") as f:
+                reuse_recs = {r["id"]: r for r in map(json.loads, filter(str.strip, f))}
+
         t_arm = time.time()
         gen_tokens = 0
+        n_reused = 0
         with open(out_path, "a") as fout:
             for p in todo:
                 q = p["instruction"]
                 rec = {"id": p["id"], "arm": arm}
-                if arm in RAG_ARMS:
-                    ids, scores, texts = retrieve(q)
-                    context = CHUNK_SEP.join(texts)
-                    if args.context_chars:
-                        context = context[: args.context_chars]
-                    user = RAG_TEMPLATE.format(context=context, question=q)
-                    rec.update({"chunk_ids": ids, "chunk_scores": scores,
-                                "context_chars": len(context)})
-                else:
-                    user = q
-                messages = [{"role": "user", "content": user}]
-                if arm == "adapter_w1repro":
-                    s = tokenizer.apply_chat_template(messages, tokenize=False,
-                                                      add_generation_prompt=True)
-                    input_ids = tokenizer(s, return_tensors="pt")["input_ids"]
-                else:
-                    input_ids = tokenizer.apply_chat_template(
-                        messages, add_generation_prompt=True, return_tensors="pt")
+                input_ids, meta = render(arm, q)
+                rec.update(meta)
+                prompt_sha = hashlib.sha256(
+                    json.dumps(input_ids[0].tolist()).encode()).hexdigest()
+                old = reuse_recs.get(p["id"])
+                if old is not None and p["id"] in reuse_q:
+                    old_ids, _ = render(arm, reuse_q[p["id"]])
+                    if torch.equal(old_ids, input_ids):
+                        new_rec = dict(old, reused_from=f"gemma_arm_{arm}{args.reuse_from}.jsonl",
+                                       prompt_sha256=prompt_sha)
+                        fout.write(json.dumps(new_rec, ensure_ascii=False) + "\n")
+                        fout.flush()
+                        os.fsync(fout.fileno())
+                        n_reused += 1
+                        print(f"[{arm} id {p['id']:>3}] reused (identical prompt)", flush=True)
+                        continue
+                rec["prompt_sha256"] = prompt_sha
                 input_ids = input_ids.to(device)
                 attn = torch.ones_like(input_ids)
 
@@ -298,6 +342,7 @@ def main():
         a["wall_seconds"] = round(a.get("wall_seconds", 0) + wall, 1)
         a["generated_tokens"] = a.get("generated_tokens", 0) + gen_tokens
         a["n_answers"] = len(load_done(out_path))
+        a["reused_answers"] = a.get("reused_answers", 0) + n_reused
         a["runs"] = a.get("runs", 0) + 1
         a["last_finished"] = datetime.datetime.now().isoformat(timespec="seconds")
         env["arms"][arm] = a
@@ -310,7 +355,7 @@ def main():
                               "torch.mps.driver_allocated_memory() sampled after each generate. "
                               "Neither is VRAM.")
         env["date"] = datetime.date.today().isoformat()
-        save_env(env)
+        save_env(env, args.suffix)
         print(f"=== arm {arm} done: {wall:.1f}s, {gen_tokens} tokens", flush=True)
 
     print("\nAll requested arms complete.", flush=True)
