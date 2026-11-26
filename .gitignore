@@ -42,3 +42,11 @@ venv/
 # public corpus (fetched by scripts/fetch_corpus.sh) and its derived indices
 corpus/
 artifacts/
+
+# router evaluation (Task 6): private router labels, contexts, generations and answer-level
+# outputs quote or derive from the private corpus
+router_labels_private*.jsonl
+router_eval_per_question.csv
+generations.jsonl
+contexts.jsonl
+answer_level_summary.json
