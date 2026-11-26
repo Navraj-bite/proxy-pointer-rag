@@ -32,8 +32,32 @@ and independently LLM-verified; a human spot-check is pending. `all-MiniLM-L6-v2
 flat chunking**, in every category (tables worst: R@5 0.76 vs 0.53). Counting what
 the pointer actually delivers (the hit node plus its children), the MRR gap disappears, and
 multi-hop (where whole-section retrieval was expected to win biggest) is a tie. The pointer
-idea works; the proxy (heading + first body line) is the weak link. That is what the proxy-size
-sweep tests next.
+idea works; the proxy (heading + first body line) is the weak link; see the sweep below.
+
+### What fixes it: proxy size and chunking sweep
+
+![Recall@5 vs proxy size](docs/img/task8/recall_vs_proxy_size.png)
+
+The shipped proxy (heading + first body line) is too small. Recall rises with proxy size until
+MiniLM's 256-word-piece window cuts it off at about 1,000 body chars, so "full body" and
+"+1200 chars" are the same vector. Embedding each section's own text in ~500-char pieces and
+scoring a section by its best piece (**multi-vector**) was chosen on a dev half; flat chunking
+was tuned over 9 settings on the same half. On the **held-out test half** (n = 127):
+
+| Multi-vector − tuned flat (256/50) | Δ MRR [95% CI] | Δ R@5 [95% CI] |
+|---|---|---|
+| Strict | +0.069 [+0.015, +0.123] ✱ | +0.087 [+0.016, +0.157] ✱ |
+| Context (section vs chunk delivered) | +0.115 [+0.056, +0.174] ✱ | +0.110 [+0.039, +0.181] ✱ |
+
+Caveats: the dev-chosen flat setting dropped on test. Against the best flat setting *on test*
+(256/200), multi-vector **ties** (strict MRR −0.001 [−0.057, +0.055]); it is never significantly
+worse than any flat setting. The navigation gap closes (R@5 0.61 → 0.86). On the private corpus
+(n = 30) multi-vector ties flat, and the proxy-size curve does *not* reproduce (heading-only is the
+best single vector there).
+
+**Recommended default: rank by section-confined body chunks, deliver the whole section.** That
+keeps the repo's core idea (whole-section delivery) and retires the short proxy. Method, all
+tables and the truncation analysis: [`docs/proxy-chunk-sweep.md`](docs/proxy-chunk-sweep.md).
 
 ### Retrieval on the original private corpus
 
