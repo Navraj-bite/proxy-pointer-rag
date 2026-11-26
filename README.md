@@ -80,22 +80,26 @@ training on Apple Silicon and, on the expected MPS kernel failure, auto-generate
 notebook targeting a free T4, because the 4-bit stack is CUDA-bound.
 
 Re-run Gemma-vs-Gemma ([`run_gemma_arms.py`](run_gemma_arms.py),
-[`docs/finetune-gemma-results.md`](docs/finetune-gemma-results.md)), over the same 40 evaluation
-questions:
+[`docs/finetune-gemma-results.md`](docs/finetune-gemma-results.md)) on a **de-leaked** 40-question
+evaluation set. Every question passes a gate (`leakage_check.py --gate`): cosine < 0.8 to all SFT
+instructions and outputs, no key fact present in the SFT outputs, and no near-duplicates within
+the set. 10 original questions passed and were kept; 30 were replaced with new questions about
+manual facts the SFT data never covered.
 
 | Arm (all `gemma-3-1b-it`, greedy, 256 new tokens) | Mean cosine | Median |
 |---|---|---|
-| base | 0.498 | 0.508 |
-| base + adapter | **0.520** | 0.549 |
-| flat RAG (top-4) + base | 0.464 | 0.492 |
+| base | 0.485 | 0.511 |
+| base + adapter | 0.510 | 0.539 |
+| flat RAG (top-4) + base | **0.510** | **0.553** |
 
-**None of these gaps is significant at n = 40.** Adapter − base is +0.022, 95% CI [−0.009, +0.052];
-adapter − RAG is +0.056 [−0.012, +0.125]. The adapter's lead is concentrated on evaluation
-questions that paraphrase its training data (ids 1–20). On the 15 items with no near-duplicate in
-the training set, it scores slightly *below* the base model. The original Week 1 figures (0.5079 vs
-0.4895, 22/40 wins) compared Gemma + adapter against a **TinyLlama**-generated RAG arm, and their CI
-also crossed zero. Read this as "no measurable difference yet; the eval set needs de-leaking",
-not as a win for fine-tuning.
+**No gap is significant at n = 40.** Adapter − RAG is −0.000, 95% CI [−0.076, +0.080]. Adapter −
+base is +0.025 [−0.000, +0.050], with 29/40 wins: a small, borderline edge that may reflect domain
+register rather than knowledge. On the original evaluation set, the adapter appeared to lead RAG
+by +0.056. That lead came from questions paraphrasing its training data: on those 16 items the
+adapter beats RAG by +0.130 [+0.042, +0.225], and on clean questions it ties. The original Week 1
+figures (0.5079 vs 0.4895, 22/40 wins) also compared Gemma + adapter against a
+**TinyLlama**-generated RAG arm, and their CI crossed zero. **Treat fine-tuning and flat RAG as
+indistinguishable on this benchmark.**
 
 The shipped adapter's `training_args.bin` records an MPS device with bf16 off. 4-bit
 bitsandbytes doesn't run on MPS, so the adapter was most likely trained with `finetune.py`'s
@@ -107,9 +111,10 @@ non-quantized LoRA path, not 4-bit QLoRA.
   generated with `TinyLlama-1.1B-Chat`, so those scores measure retrieval and routing mixed with a
   weak generator, not answer quality. The Week 1 fine-tuning comparison has been re-run
   Gemma-vs-Gemma (above).
-- **The fine-tune eval set overlaps the SFT data.** Eval ids 1–20 are paraphrases of training rows
-  0–19 (15/20 have instruction cosine > 0.9), which inflates any fine-tuned arm. See the leakage
-  section of [`docs/finetune-gemma-results.md`](docs/finetune-gemma-results.md).
+- **The original fine-tune eval set overlapped the SFT data.** Results now use the gated v2 set
+  (the evaluation set is corpus-derived, so it isn't committed). The v2 references are written in
+  the same terse style as the SFT data, which still favours the adapter under a cosine metric, and
+  they haven't been hand-checked yet.
 - **No training curve was captured.** The LoRA adapter exists as proof training ran, but no
   loss trace or notebook output was saved. See `docs/week1-training-evidence.md`.
 - **Week 1 recorded no latency.** Only Week 2 has per-question timings. Not estimated.
