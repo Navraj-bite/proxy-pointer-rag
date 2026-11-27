@@ -18,9 +18,13 @@ import sys
 import faiss
 from sentence_transformers import SentenceTransformer
 
-PP_INDEX_FILE = "pp_faiss.index"
-PP_META_FILE  = "pp_metadata.pkl"
-PP_TREE_FILE  = "pp_tree.pkl"
+from corpus_config import get_config
+
+# Paths come from $PPRAG_CORPUS (default "private" -> the original file names).
+_CFG          = get_config()
+PP_INDEX_FILE = _CFG["pp_index_file"]
+PP_META_FILE  = _CFG["pp_meta_file"]
+PP_TREE_FILE  = _CFG["pp_tree_file"]
 EMBED_MODEL   = "all-MiniLM-L6-v2"
 
 # Module-level singletons so repeated calls don't reload everything.

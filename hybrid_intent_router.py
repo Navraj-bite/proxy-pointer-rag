@@ -17,6 +17,8 @@ import re
 import sys
 import time
 
+from corpus_config import assistant_intro
+
 # ---------------------------------------------------------------------------
 # Regex trigger tables
 # ---------------------------------------------------------------------------
@@ -96,8 +98,10 @@ def _generate(messages: list, max_new_tokens: int = 150) -> str:
 # ---------------------------------------------------------------------------
 # Fast route — (fine-tuned Gemma in production; TinyLlama as stand-in)
 # ---------------------------------------------------------------------------
+# Subject comes from $PPRAG_CORPUS; for "private" this is byte-identical to
+# the original "You are a support assistant for Serac filling machines. ..."
 _FAST_SYSTEM = (
-    "You are a support assistant for Serac filling machines. "
+    assistant_intro() + " "
     "Answer the operator's question concisely and accurately."
 )
 
@@ -114,7 +118,7 @@ def _fast_answer(question: str) -> str:
 # Deep route — proxy-pointer context + LLM RAG
 # ---------------------------------------------------------------------------
 _DEEP_SYSTEM = (
-    "You are a support assistant for Serac filling machines. "
+    assistant_intro() + " "
     "Answer the operator's question using ONLY the context provided below. "
     "If the answer is not in the context, say you don't know."
 )

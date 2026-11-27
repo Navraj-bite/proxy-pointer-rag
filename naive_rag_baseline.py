@@ -8,17 +8,21 @@ from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
-PDF_PATHS = [
-    "resources/machine_overview_troubleshooting.pdf",
-    "resources/operator_manual.pdf",
-]
+from corpus_config import assistant_intro, ensure_parent_dir, get_config
+
+# Paths come from $PPRAG_CORPUS (default "private" -> the original file names
+# and the original pypdf-over-PDFs source).
+_CFG = get_config()
+PDF_PATHS = _CFG["pdf_paths"]
+MARKDOWN_PATHS = _CFG["input_files"]      # same markdown the tree is built from
+SOURCE = _CFG["baseline_source"]          # "pdf" | "markdown"
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 EMBED_MODEL = "all-MiniLM-L6-v2"
 GEN_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 TOP_K = 4
-INDEX_FILE = "faiss.index"
-CHUNKS_FILE = "chunks.pkl"
+INDEX_FILE = _CFG["flat_index_file"]
+CHUNKS_FILE = _CFG["flat_chunks_file"]
 
 
 def load_pdfs(paths):
@@ -31,6 +35,28 @@ def load_pdfs(paths):
         print(f"  loaded {path}: {len(text)} chars, {len(reader.pages)} pages")
         docs.append(text)
     return docs
+
+
+def load_markdown(paths):
+    """Read the heading-structured markdown files as plain text (no parsing)."""
+    docs = []
+    for path in paths:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Can't find {path}")
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        print(f"  loaded {path}: {len(text)} chars")
+        docs.append(text)
+    return docs
+
+
+def load_documents(source=None):
+    source = source or SOURCE
+    if source == "pdf":
+        return load_pdfs(PDF_PATHS)
+    if source == "markdown":
+        return load_markdown(MARKDOWN_PATHS)
+    raise ValueError(f"unknown baseline source {source!r}")
 
 
 def chunk_documents(docs):
@@ -51,6 +77,8 @@ def build_index(chunks):
     ).astype("float32")
     index = faiss.IndexFlatIP(vectors.shape[1])
     index.add(vectors)
+    ensure_parent_dir(INDEX_FILE)
+    ensure_parent_dir(CHUNKS_FILE)
     faiss.write_index(index, INDEX_FILE)
     with open(CHUNKS_FILE, "wb") as f:
         pickle.dump(chunks, f)
@@ -78,7 +106,7 @@ def generate(question, context_chunks):
 
     context = "\n\n---\n\n".join(context_chunks)
     prompt = (
-        "You are a support assistant for Serac filling machines. "
+        assistant_intro() + " "
         "Answer the question using ONLY the context below. "
         "If the answer is not in the context, say you don't know.\n\n"
         f"Context:\n{context}\n\n"
@@ -97,11 +125,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("question", nargs="?")
     parser.add_argument("--build-only", action="store_true")
+    parser.add_argument("--rebuild", action="store_true",
+                        help="rebuild the index even if it already exists")
+    parser.add_argument("--source", choices=["pdf", "markdown"], default=None,
+                        help=f"override the corpus default (currently {SOURCE!r})")
     args = parser.parse_args()
 
-    if not (os.path.exists(INDEX_FILE) and os.path.exists(CHUNKS_FILE)):
-        print("Building index...")
-        docs = load_pdfs(PDF_PATHS)
+    if args.rebuild or not (os.path.exists(INDEX_FILE) and os.path.exists(CHUNKS_FILE)):
+        print(f"Building index from {args.source or SOURCE} -> {INDEX_FILE} ...")
+        docs = load_documents(args.source)
         chunks = chunk_documents(docs)
         build_index(chunks)
 
