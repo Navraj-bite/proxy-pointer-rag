@@ -1,0 +1,245 @@
+{
+ "mode": "build",
+ "env": {
+  "date": "2026-11-26T05:48:24-05:00",
+  "python": "3.9.6",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "cpu": "Apple M4",
+  "cpu_count": 10,
+  "devices": {
+   "embedder": "mps"
+  },
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null,
+   "TOKENIZERS_PARALLELISM": null,
+   "torch_num_threads": 4,
+   "torch_num_interop_threads": 10,
+   "faiss_omp_max_threads": 10
+  },
+  "HF_HUB_OFFLINE": "1",
+  "models": {
+   "sentence-transformers/all-MiniLM-L6-v2": {
+    "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+   }
+  },
+  "seed": 0,
+  "libraries": {
+   "torch": "2.8.0",
+   "transformers": "4.57.6",
+   "sentence-transformers": "5.1.2",
+   "faiss-cpu": "1.13.0",
+   "numpy": "2.0.2",
+   "langchain-text-splitters": "0.3.11",
+   "pypdf": "6.13.1",
+   "tokenizers": "0.22.2"
+  },
+  "git_commit": "9ac223ecb6e3e768071e487749ee6ec197072595",
+  "git_dirty": true,
+  "corpus": "public",
+  "loadavg_start": null,
+  "machine_idle": false,
+  "machine_note": "other agents were doing light file reading/grep during the run",
+  "corpus_commit": "d6f12ad1c4f70ad3230afd7d86e971421e02fef4",
+  "corpus_markdown_sha256": "6af1f53478c86ee24797a87565d70debd39788f81b656575640a1a4ebd860d95",
+  "loadavg_end": [
+   1.62890625,
+   2.37890625,
+   2.79736328125
+  ],
+  "loadavg_note": "loadavg_start was not captured at process start in this run (script bug, since fixed); loadavg_end is at the end of the run"
+ },
+ "config": {
+  "repeats": 3,
+  "flat_source": "markdown",
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "encode_batch_size": 32,
+  "note": "embedder load timed separately; repeat 1 includes cold file cache"
+ },
+ "embedder_load_ms": 1564.69075,
+ "summary_ms": {
+  "proxy_pointer": {
+   "tree_build": {
+    "n": 3,
+    "mean": 5.392444333333302,
+    "p50": 4.139667000000458,
+    "p95": 7.911153900000301,
+    "min": 3.707457999999164,
+    "max": 8.330208000000283
+   },
+   "proxy_texts": {
+    "n": 3,
+    "mean": 1.0585413333335698,
+    "p50": 1.0893750000011693,
+    "p95": 1.1366619000000355,
+    "min": 0.9443329999996308,
+    "max": 1.1419159999999096
+   },
+   "embed": {
+    "n": 3,
+    "mean": 574.0769723333334,
+    "p50": 386.41475000000014,
+    "p95": 911.4563756000003,
+    "min": 366.02183299999956,
+    "max": 969.7943340000004
+   },
+   "faiss_add": {
+    "n": 3,
+    "mean": 0.08077800000005908,
+    "p50": 0.04583399999980031,
+    "p95": 0.14235809999982862,
+    "min": 0.04341700000054516,
+    "max": 0.15308299999983177
+   },
+   "write": {
+    "n": 3,
+    "mean": 2.1898329999994934,
+    "p50": 2.5887499999992514,
+    "p95": 2.756674699999717,
+    "min": 1.2054159999994596,
+    "max": 2.775332999999769
+   },
+   "total": {
+    "n": 3,
+    "mean": 582.7985689999998,
+    "p50": 392.9475829999998,
+    "p95": 923.0923201999998,
+    "min": 373.4508329999997,
+    "max": 981.9972909999999
+   },
+   "disk_bytes": {
+    "pp_faiss.index": 1004589,
+    "pp_metadata.pkl": 52792,
+    "pp_tree.pkl": 553439
+   },
+   "disk_bytes_total": 1610820,
+   "vectors": 654,
+   "dim": 384,
+   "tree_nodes": 662
+  },
+  "flat": {
+   "load_source": {
+    "n": 3,
+    "mean": 0.35658333333306774,
+    "p50": 0.35774999999915735,
+    "p95": 0.39671189999985756,
+    "min": 0.31095900000011056,
+    "max": 0.40104099999993537
+   },
+   "chunk": {
+    "n": 3,
+    "mean": 4.104403000000367,
+    "p50": 3.7468750000009265,
+    "p95": 4.8713881000003845,
+    "min": 3.569999999999851,
+    "max": 4.996334000000324
+   },
+   "embed": {
+    "n": 3,
+    "mean": 2805.484638666667,
+    "p50": 2625.468541,
+    "p95": 3140.3013163000005,
+    "min": 2593.480417,
+    "max": 3197.5049580000004
+   },
+   "faiss_add": {
+    "n": 3,
+    "mean": 0.07620833333277233,
+    "p50": 0.06937499999892793,
+    "p95": 0.09022529999906936,
+    "min": 0.06670800000030397,
+    "max": 0.09254199999908508
+   },
+   "write": {
+    "n": 3,
+    "mean": 0.9758193333334239,
+    "p50": 0.9715830000001091,
+    "p95": 1.1652333000004234,
+    "min": 0.7691249999997041,
+    "max": 1.1867500000004583
+   },
+   "total": {
+    "n": 3,
+    "mean": 2810.997652666667,
+    "p50": 2630.388042,
+    "p95": 3146.5877661,
+    "min": 2598.661625,
+    "max": 3203.943291
+   },
+   "disk_bytes": {
+    "faiss.index": 2185773,
+    "chunks.pkl": 528059
+   },
+   "disk_bytes_total": 2713832,
+   "vectors": 1423,
+   "dim": 384,
+   "source": "markdown",
+   "mean_chunk_chars": 365.40126493323964
+  }
+ },
+ "runs_s": {
+  "proxy_pointer": [
+   {
+    "tree_build": 0.008330208000000283,
+    "proxy_texts": 0.0009443329999996308,
+    "embed": 0.9697943340000004,
+    "faiss_add": 0.00015308299999983177,
+    "write": 0.002775332999999769,
+    "total": 0.9819972909999999
+   },
+   {
+    "tree_build": 0.004139667000000458,
+    "proxy_texts": 0.0011419159999999096,
+    "embed": 0.38641475000000014,
+    "faiss_add": 4.583399999980031e-05,
+    "write": 0.0012054159999994596,
+    "total": 0.39294758299999977
+   },
+   {
+    "tree_build": 0.003707457999999164,
+    "proxy_texts": 0.0010893750000011693,
+    "embed": 0.3660218329999996,
+    "faiss_add": 4.341700000054516e-05,
+    "write": 0.0025887499999992514,
+    "total": 0.3734508329999997
+   }
+  ],
+  "flat": [
+   {
+    "load_source": 0.00040104099999993537,
+    "chunk": 0.004996334000000324,
+    "embed": 3.1975049580000006,
+    "faiss_add": 6.937499999892793e-05,
+    "write": 0.0009715830000001091,
+    "total": 3.203943291
+   },
+   {
+    "load_source": 0.00035774999999915735,
+    "chunk": 0.003569999999999851,
+    "embed": 2.5934804170000003,
+    "faiss_add": 6.670800000030397e-05,
+    "write": 0.0011867500000004583,
+    "total": 2.598661625
+   },
+   {
+    "load_source": 0.00031095900000011056,
+    "chunk": 0.0037468750000009265,
+    "embed": 2.625468541,
+    "faiss_add": 9.254199999908508e-05,
+    "write": 0.0007691249999997041,
+    "total": 2.630388042
+   }
+  ]
+ },
+ "memory": {
+  "peak_rss_bytes": 684523520,
+  "mps": {
+   "driver_allocated_high_water_bytes": 1362837504,
+   "current_allocated_high_water_bytes": 90861056,
+   "note": "max over samples taken after load and after every query; unified memory, not VRAM"
+  },
+  "label": "unified-memory high-water mark / peak RSS (not VRAM)"
+ }
+}

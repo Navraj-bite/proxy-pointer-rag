@@ -72,6 +72,22 @@ and the hybrid column mixes retrieval with routing. Direct retrieval metrics are
 Full numbers: [`results/week2-proxy-vs-vanilla-results.csv`](results/week2-proxy-vs-vanilla-results.csv)
 · analysis: [`docs/week2-benchmark-report.md`](docs/week2-benchmark-report.md)
 
+### Latency (retriever only)
+
+Measured stage by stage on an Apple M4 (CPU, MiniLM query embedding + FAISS `IndexFlatIP`),
+models preloaded, 3 repeats per question. Details: [`docs/latency-memory.md`](docs/latency-memory.md).
+
+| Retrieval, end to end (p50 / p95) | Flat 500/50, top-4 | Proxy-pointer, top-1 + children |
+|---|---|---|
+| Public corpus (252 queries) | 3.6 / 6.1 ms | 3.5 / 5.7 ms |
+| Private corpus (30 queries) | 3.7 / 5.0 ms | 3.7 / 5.3 ms |
+
+Query embedding is 99% of that; search, pointer dereference and context assembly together take
+< 0.05 ms. TinyLlama generation on the same machine takes 11–13 s per answer, set mainly by
+answer length. **The 22.2 s / 26.7 s figures above measure the generator and the router's fast
+route (which writes longer answers), not retrieval.** GPU memory (VRAM) on a Colab T4 is not yet
+measured: [`colab/measure_vram.py`](colab/measure_vram.py) is ready to run.
+
 ## How it works
 
 ![Proxy-pointer architecture](docs/diagrams/week2_proxy_pointer_architecture.png)
