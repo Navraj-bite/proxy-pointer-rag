@@ -1,0 +1,5 @@
+{"id": 1, "question": "What does fault code W02 mean and what should I do?", "category": "tabular", "reference_answer": "W02 means low hydraulic oil; top up oil to the MAX mark."}
+{"id": 2, "question": "What are the steps to start the widget press?", "category": "procedure", "reference_answer": "Key switch to Run, wait for blue lamp, press START, confirm batch size and press OK."}
+{"id": 3, "question": "How do I clear a fault code?", "category": "procedure", "reference_answer": "Hold STOP for three seconds after fixing the cause."}
+{"id": 4, "question": "What colour is the status lamp when the press is idle?", "category": "navigation", "reference_answer": "Blue."}
+{"id": 5, "question": "What is the guard?", "category": "navigation", "reference_answer": "The transparent safety cover; the press cannot run while it is open."}

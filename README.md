@@ -11,11 +11,34 @@ retrieval returns a complete section, tables included, instead of a 500-characte
 
 ## Results
 
-30 categorized questions over two industrial equipment manuals. `all-MiniLM-L6-v2` embeddings,
-FAISS `IndexFlatIP`, same TinyLlama-1.1B weights and same question set on both sides (prompts,
-context cap and `max_new_tokens` differ). The right-hand column is the **router**: 18/30
-questions routed `fast` and got no retrieval at all. What every number measures, and its known
-confounds: [`docs/metrics.md`](docs/metrics.md).
+### Retrieval (primary metric)
+
+30 categorized questions over two industrial equipment manuals (private corpus — these numbers
+cannot yet be regenerated from a clean clone; a public-corpus reproduction is in progress).
+`all-MiniLM-L6-v2`, FAISS `IndexFlatIP`, no router, no generator. Each system returns a ranked
+list of sections, scored against gold section labels, which are **agent-drafted and not yet
+human-verified**. Method: [`docs/retrieval-metrics.md`](docs/retrieval-metrics.md).
+
+| Metric (section-level, strict) | Flat 500/50 chunks (same markdown) | Proxy-pointer |
+|---|---|---|
+| Recall@1 | **0.60** | 0.50 |
+| Recall@3 | **0.83** | 0.63 |
+| Recall@5 | **0.87** | 0.70 |
+| MRR | **0.72** | 0.57 |
+| nDCG@5 | **0.72** | 0.57 |
+
+Proxy − flat, paired bootstrap 95% CI (n = 30): MRR −0.15 [−0.28, −0.03], Recall@5 −0.17
+[−0.30, −0.03]. **Measured directly, proxy-pointer retrieval is worse than flat chunking on this
+corpus.** The gap is mostly tables (tabular Recall@5 0.50 vs 0.90, n = 10). The proxy is the heading
+plus the first body line, so it can't see the rows of a large table. On procedures the two tie
+under the strict rule. Counting what the assembler actually hands the generator (node + direct
+children), proxy-pointer reaches procedure Recall@3 = 1.0 vs 0.8. One exploratory run with a
+heading-only proxy closed most of the MRR gap (0.70); the proxy-size sweep is planned.
+
+### Answer similarity (secondary, legacy)
+
+The original benchmark, kept for continuity. TinyLlama generator; both systems' context cut to
+1,200 chars before generation.
 
 | Metric | Vanilla RAG | Proxy-Pointer + router |
 |---|---|---|

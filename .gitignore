@@ -15,6 +15,15 @@ rag_baseline_outputs.csv
 finetuned_outputs.csv
 *.bak
 
+# retrieval-metrics artifacts (gold labels, verification sheets and per-question
+# outputs for a private corpus quote its headings/text)
+gold_labels.jsonl
+gold_verification_sheet.csv
+retrieval_per_question.csv
+retrieval_summary.csv
+retrieval_summary.json
+examples/retrieval_metrics/out/
+
 # built indices / embeddings (contain corpus text)
 *.pkl
 *.index

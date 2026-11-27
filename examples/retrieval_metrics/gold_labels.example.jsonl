@@ -1,0 +1,5 @@
+{"id": 1, "gold": [{"doc": "widget_manual.md", "heading_path": ["3. FAULT CODES"]}], "label_source": "agent-drafted", "verified": false, "notes": "Fault table is in the body of the level-1 heading."}
+{"id": 2, "gold": [{"doc": "widget_manual.md", "heading_path": ["2. OPERATION", "2.1. Start-up procedure"]}], "label_source": "agent-drafted", "verified": false, "notes": ""}
+{"id": 3, "gold": [{"doc": "widget_manual.md", "heading_path": ["3. FAULT CODES", "3.1. Resetting a fault"]}], "label_source": "agent-drafted", "verified": false, "notes": ""}
+{"id": 4, "gold": [{"doc": "widget_manual.md", "heading_path": ["1. OVERVIEW", "1.2. Status lamp"]}], "label_source": "agent-drafted", "verified": false, "notes": ""}
+{"id": 5, "gold": [{"doc": "glossary.md", "heading_path": ["Glossary", {"title": "Guard", "occurrence": 1}]}], "label_source": "human", "verified": true, "notes": "Shows the optional occurrence form (only needed when sibling headings repeat)."}
