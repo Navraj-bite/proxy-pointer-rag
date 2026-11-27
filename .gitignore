@@ -29,3 +29,14 @@ venv/
 
 # os
 .DS_Store
+
+# Task 5 Gemma-arm run artifacts (generated answers / per-item data)
+gemma_arm_*.jsonl
+gemma_run_env.json
+gemma_arms_*.csv
+gemma_arms_*.json
+leakage_per_item.csv
+leakage_report.json
+*.log
+gate_*.csv
+gemma_run_env*.json
