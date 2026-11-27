@@ -35,6 +35,27 @@ multi-hop (where whole-section retrieval was expected to win biggest) is a tie. 
 idea works; the proxy (heading + first body line) is the weak link. That is what the proxy-size
 sweep tests next.
 
+### Routing vs retrieval
+
+The original "Proxy-Pointer" column was a **router**: questions with no regex trigger word got
+no retrieval at all. Measured separately ([`docs/router-evaluation.md`](docs/router-evaluation.md)),
+the regex router agrees with hand labels on 62% of public questions (70% private). It sends 85
+of the 205 public questions that need a lookup to the no-retrieval path. Section-level MRR,
+public n = 252 (private n = 30 in brackets):
+
+| | Flat 500/50 | Proxy-pointer |
+|---|---|---|
+| Always retrieve | 0.617 (0.716) | 0.507 (0.569) |
+| Regex router (fast = no retrieval) | 0.303 (0.227) | 0.250 (0.213) |
+| Oracle router (hand labels) | 0.497 (0.433) | 0.422 (0.313) |
+
+Routing costs more recall than the retriever choice (router − none: −0.31 / −0.26 MRR, CIs
+exclude 0; proxy − flat: −0.11). At answer level (private, TinyLlama, identical settings in every
+cell), proxy-pointer answers trail flat answers by −0.049 [−0.096, −0.002] without a router. The
+regex router shrinks that to −0.007, because on the questions it skips, no context scores about
+the same as proxy-pointer's context. **The published "hybrid ≈ vanilla" result came from routing,
+not from proxy-pointer retrieval.**
+
 ### Retrieval on the original private corpus
 
 30 categorized questions over two industrial equipment manuals (private corpus — these numbers
