@@ -102,7 +102,7 @@ from document_tree_builder import DocumentTree
 
 EMBED_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_K = (1, 3, 5)
-CATEGORIES = ("tabular", "procedure", "navigation")
+CATEGORIES = ("tabular", "procedure", "navigation", "multihop")
 SYSTEMS_PRIMARY = ("proxy_pointer", "flat_md")
 
 
@@ -216,7 +216,7 @@ def resolve_gold(tree, gold_records, question_ids=None):
             raise GoldResolutionError(f"question {qid}: empty gold list")
         ids = []
         for g in rec["gold"]:
-            nid = resolve_heading_path(tree, g["doc"], g["heading_path"])
+            nid = resolve_heading_path(tree, os.path.basename(g["doc"]), g["heading_path"])
             if not is_indexable(tree, tree.nodes[nid]):
                 raise GoldResolutionError(f"question {qid}: gold {g} is not an indexable section")
             if nid not in ids:
@@ -696,9 +696,25 @@ def ndcg_at_k(rel, k, n_rel):
     return float(dcg / ideal) if ideal > 0 else 0.0
 
 
-def score_ranking(tree, ranked, gold, context_fn, ks=DEFAULT_K, ndcg_k=5, mrr_depth=10):
+def all_parts_at_k(ranked, parts, context_fn, k):
+    """1.0 iff every required part has at least one of its alternative gold sections
+    covered by the top-k results (multi-hop "found everything" recall)."""
+    covered = set()
+    for s in ranked[:k]:
+        covered |= context_fn(s)
+    return 1.0 if all(covered & set(p) for p in parts) else 0.0
+
+
+def score_ranking(tree, ranked, gold, context_fn, ks=DEFAULT_K, ndcg_k=5, mrr_depth=10,
+                  parts=None):
+    """`gold` is the union of all gold sections (any hit = relevant). `parts` (optional) is a
+    list of required parts, each a list of alternative node ids; it adds AllParts@k. When a
+    question has a single part (every non-multihop question), AllParts@k == R@k."""
     rel = relevance_vector(ranked, gold, context_fn)
     out = {f"R@{k}": recall_at_k(rel, k) for k in ks}
+    parts = parts or [list(gold)]
+    for k in ks:
+        out[f"AllParts@{k}"] = all_parts_at_k(ranked, parts, context_fn, k)
     out["MRR"] = reciprocal_rank(rel, mrr_depth)
     out[f"nDCG@{ndcg_k}"] = ndcg_at_k(rel, ndcg_k, n_relevant_possible(tree, gold, context_fn))
     first = next((i for i, r in enumerate(rel[:mrr_depth], start=1) if r), None)
@@ -784,7 +800,9 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--md", nargs="+", required=True, help="corpus markdown files (tree source)")
     ap.add_argument("--questions", required=True, help="JSONL with id, question, category")
-    ap.add_argument("--gold", required=True, help="gold label JSONL (see docs/retrieval-metrics.md)")
+    ap.add_argument("--gold", default=None,
+                    help="gold label JSONL (see docs/retrieval-metrics.md); if omitted, the "
+                         "`gold` field inline in --questions is used (public-corpus format)")
     ap.add_argument("--k", nargs="+", type=int, default=list(DEFAULT_K))
     ap.add_argument("--ndcg-k", type=int, default=5)
     ap.add_argument("--mrr-depth", type=int, default=10)
@@ -811,9 +829,21 @@ def main(argv=None):
     np.random.seed(args.seed)
 
     questions = load_jsonl(args.questions)
-    gold_records = load_jsonl(args.gold)
+    gold_records = load_jsonl(args.gold) if args.gold else [
+        {"id": q["id"], "gold": q.get("gold"), "label_source": q.get("label_source", ""),
+         "verified": q.get("verified", False)} for q in questions]
     tree = build_tree(args.md)
     gold = resolve_gold(tree, gold_records, [q["id"] for q in questions])
+    # Required parts (multi-hop): `gold_parts` = [[alt, alt, ...], [alt, ...]] per question.
+    # Questions without it have one part = all their gold sections as alternatives.
+    gold_parts = {}
+    for q in questions:
+        if q.get("gold_parts"):
+            gold_parts[q["id"]] = [
+                [resolve_heading_path(tree, os.path.basename(g["doc"]), g["heading_path"]) for g in part]
+                for part in q["gold_parts"]]
+        else:
+            gold_parts[q["id"]] = [list(gold[q["id"]])]
     print(f"gold resolved: {sum(len(v) for v in gold.values())} sections for {len(gold)} questions")
     if args.verification_sheet:
         write_verification_sheet(args.verification_sheet, tree, questions, gold_records, gold)
@@ -853,7 +883,8 @@ def main(argv=None):
     rules = {"strict": lambda ctx: r.context_identity,
              "context": lambda ctx: ctx,
              "context_parent": lambda ctx: r.context_proxy}
-    metric_names = [f"R@{k}" for k in args.k] + ["MRR", f"nDCG@{args.ndcg_k}"]
+    metric_names = ([f"R@{k}" for k in args.k] + ["MRR", f"nDCG@{args.ndcg_k}"]
+                    + [f"AllParts@{k}" for k in args.k])
 
     def coverage(sname, i, q, cap):
         g = gold[q["id"]]
@@ -873,7 +904,7 @@ def main(argv=None):
             ranked = rank_fn(i, q["question"])
             for rule, ctx_for in rules.items():
                 m = score_ranking(tree, ranked, gold[q["id"]], ctx_for(ctx), args.k,
-                                  args.ndcg_k, args.mrr_depth)
+                                  args.ndcg_k, args.mrr_depth, parts=gold_parts[q["id"]])
                 rows.append({"id": q["id"], "category": q.get("category", ""),
                              "router_route": route, "system": sname, "rule": rule, **m,
                              "n_gold": len(gold[q["id"]]),
@@ -920,15 +951,15 @@ def main(argv=None):
             for cat in [None] + cats:
                 a = sorted(select("proxy_pointer", rule, cat), key=lambda x: x["id"])
                 b = sorted(select(base, rule, cat), key=lambda x: x["id"])
-                for m in ("MRR", f"R@{kmax}"):
+                for m in ("MRR", f"R@{kmax}", f"AllParts@{kmax}"):
                     key = f"proxy_pointer-minus-{base}|{rule}|{cat or 'overall'}|{m}"
                     boots[key] = paired_bootstrap([x[m] for x in a], [x[m] for x in b],
                                                   args.bootstrap, args.seed)
 
     summary = {
-        "description": "Section-level retrieval metrics; gold labels agent-drafted, not human-verified.",
+        "description": "Section-level retrieval metrics; see config.gold_label_source for label provenance.",
         "config": {"md": [os.path.basename(p) for p in args.md], "questions": os.path.basename(args.questions),
-                   "gold": os.path.basename(args.gold), "k": args.k, "ndcg_k": args.ndcg_k,
+                   "gold": os.path.basename(args.gold) if args.gold else "inline", "k": args.k, "ndcg_k": args.ndcg_k,
                    "mrr_depth": args.mrr_depth, "proxy_mode": args.proxy_mode,
                    "chunk_size": args.chunk_size, "overlap": args.overlap,
                    "flat_context_chunks": args.flat_context_chunks, "context_cap": args.context_cap,
