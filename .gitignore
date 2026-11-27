@@ -42,3 +42,9 @@ venv/
 # public corpus (fetched by scripts/fetch_corpus.sh) and its derived indices
 corpus/
 artifacts/
+
+# Task 8 sweep outputs (public ones live under artifacts/; private runs must stay outside the repo)
+sweep_per_question.csv
+sweep_tables.md
+sweep_summary.json
+emb_cache.pkl

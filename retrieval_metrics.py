@@ -230,6 +230,29 @@ def resolve_gold(tree, gold_records, question_ids=None):
     return out
 
 
+def load_gold(tree, questions, gold_path=None):
+    """
+    -> (gold_records, {qid: [node_id]}, {qid: [[alt node_id, ...], ...]}).
+    Gold comes from *gold_path* (JSONL) or, if None, the `gold` field inline in
+    *questions* (public-corpus format). Required parts (multi-hop): `gold_parts`
+    = [[alt, alt, ...], [alt, ...]] per question; questions without it have one
+    part = all their gold sections as alternatives.
+    """
+    gold_records = load_jsonl(gold_path) if gold_path else [
+        {"id": q["id"], "gold": q.get("gold"), "label_source": q.get("label_source", ""),
+         "verified": q.get("verified", False)} for q in questions]
+    gold = resolve_gold(tree, gold_records, [q["id"] for q in questions])
+    gold_parts = {}
+    for q in questions:
+        if q.get("gold_parts"):
+            gold_parts[q["id"]] = [
+                [resolve_heading_path(tree, os.path.basename(g["doc"]), g["heading_path"]) for g in part]
+                for part in q["gold_parts"]]
+        else:
+            gold_parts[q["id"]] = [list(gold[q["id"]])]
+    return gold_records, gold, gold_parts
+
+
 # --------------------------------------------------------------------------- #
 # Proxy construction (pluggable)
 # --------------------------------------------------------------------------- #
@@ -829,21 +852,8 @@ def main(argv=None):
     np.random.seed(args.seed)
 
     questions = load_jsonl(args.questions)
-    gold_records = load_jsonl(args.gold) if args.gold else [
-        {"id": q["id"], "gold": q.get("gold"), "label_source": q.get("label_source", ""),
-         "verified": q.get("verified", False)} for q in questions]
     tree = build_tree(args.md)
-    gold = resolve_gold(tree, gold_records, [q["id"] for q in questions])
-    # Required parts (multi-hop): `gold_parts` = [[alt, alt, ...], [alt, ...]] per question.
-    # Questions without it have one part = all their gold sections as alternatives.
-    gold_parts = {}
-    for q in questions:
-        if q.get("gold_parts"):
-            gold_parts[q["id"]] = [
-                [resolve_heading_path(tree, os.path.basename(g["doc"]), g["heading_path"]) for g in part]
-                for part in q["gold_parts"]]
-        else:
-            gold_parts[q["id"]] = [list(gold[q["id"]])]
+    gold_records, gold, gold_parts = load_gold(tree, questions, args.gold)
     print(f"gold resolved: {sum(len(v) for v in gold.values())} sections for {len(gold)} questions")
     if args.verification_sheet:
         write_verification_sheet(args.verification_sheet, tree, questions, gold_records, gold)
