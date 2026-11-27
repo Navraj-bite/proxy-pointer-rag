@@ -12,15 +12,21 @@ retrieval returns a complete section, tables included, instead of a 500-characte
 ## Results
 
 30 categorized questions over two industrial equipment manuals. `all-MiniLM-L6-v2` embeddings,
-FAISS `IndexFlatIP`, same generator and same question set on both sides.
+FAISS `IndexFlatIP`, same TinyLlama-1.1B weights and same question set on both sides (prompts,
+context cap and `max_new_tokens` differ). The right-hand column is the **router**: 18/30
+questions routed `fast` and got no retrieval at all. What every number measures, and its known
+confounds: [`docs/metrics.md`](docs/metrics.md).
 
 | Metric | Vanilla RAG | Proxy-Pointer + router |
 |---|---|---|
 | Mean cosine | **0.6985** | 0.6810 |
-| Retrieval correct (keyword) | **20/30 (67%)** | 14/30 (47%) |
+| Keyword match in generated answer¹ | **20/30 (67%)** | 14/30 (47%) |
 | Mean latency | **22.2 s** | 26.7 s |
 
-**The aggregate says vanilla wins. The per-category breakdown says that's the wrong read:**
+¹ Despite its old name, this checks the *generated answer*, not the retrieved context — it is not
+a retrieval metric.
+
+Per category (n = 10 each):
 
 | Category | Vanilla | Proxy-Pointer | Δ |
 |---|---|---|---|
@@ -28,15 +34,17 @@ FAISS `IndexFlatIP`, same generator and same question set on both sides.
 | tabular | 0.6625 | 0.6608 | −0.002 |
 | navigation | **0.8160** | 0.7334 | −0.083 |
 
-The win is concentrated exactly where flat chunking fails. Q17 (a multi-step procedure)
-improves **+0.42** and Q3 (an alarm table with FDA logging flags) improves **+0.30**, because
-the pointer returns the section node with its table intact. The loss is concentrated on short
-navigation lookups — a unique keyword in a small corpus is already trivially found by flat
-chunking, and the proxy (heading + first body line) can miss a term buried mid-section.
+**No difference here is statistically significant** (Wilcoxon p = 0.66 overall; 0.63 / 0.77 /
+0.38 per category). An earlier version of this README read the procedure row as a
+proxy-pointer win. It isn't one: the procedure gain comes from `fast`-route questions that used
+no proxy-pointer retrieval (Q17, the +0.42 headline, included). On the 12 questions that actually
+used proxy-pointer retrieval it scored 0.6594 vs vanilla's 0.6687. Q3 (+0.30) did use it, but only
+the first 1,200 of 12,572 assembled characters reached the generator.
 
-So: proxy-pointer retrieval is the right tool for procedures and tables, and the wrong tool for
-keyword lookups. A production system should route between them — which is what
-`hybrid_intent_router.py` attempts.
+So this benchmark does **not** establish that proxy-pointer retrieval is better for procedures
+and tables. It cannot: the score is answer-similarity, which mixes retrieval with generation,
+and the hybrid column mixes retrieval with routing. Direct retrieval metrics are the fix — see
+[`docs/metrics.md`](docs/metrics.md) and the evaluation plan.
 
 Full numbers: [`results/week2-proxy-vs-vanilla-results.csv`](results/week2-proxy-vs-vanilla-results.csv)
 · analysis: [`docs/week2-benchmark-report.md`](docs/week2-benchmark-report.md)
@@ -48,12 +56,13 @@ Full numbers: [`results/week2-proxy-vs-vanilla-results.csv`](results/week2-proxy
 1. **`parse_documents.py`** — PDFs to heading-structured markdown.
 2. **`document_tree_builder.py`** — builds a `DocumentTree` of `DocumentNode`s, each carrying
    `heading_title`, `body_content`, `parent_node_id`, `start_line`/`end_line`.
-3. **`proxy_pointer_indexer.py`** — embeds a proxy per content node (heading + first meaningful
-   body line, under 300 chars) and stores the pointer: `pointer_node_id`, `doc_id`, line span.
+3. **`proxy_pointer_indexer.py`** — embeds a proxy per content node (heading + first body line not
+   starting with `|` or `#`, that line cut to 200 chars) and stores the pointer: `pointer_node_id`, `doc_id`, line span.
    `ROOT` and `[FILE]` container nodes are excluded from the index; table-only nodes fall back
    to their heading. `verify_linkage()` round-trips random proxies back to their nodes and
-   asserts each pointer still resolves to non-empty body content.
-4. **`context_assembler.py`** — dereferences a hit to the node's full body.
+   prints whether each pointer still resolves to non-empty body content.
+4. **`context_assembler.py`** — dereferences the top-1 hit to the node's full body plus its
+   direct children. The benchmark truncates this context to 1,200 chars before generation.
 5. **`hybrid_intent_router.py`** — classifies a query fast vs deep on a regex trigger table
    (`table`, `parameters`, `procedure`, `steps`, `how do i`, `list`, …). Zero triggers →
    fast/certain; exactly one → deep/borderline; two or more → deep/certain, biasing ambiguous
@@ -71,12 +80,16 @@ training on Apple Silicon and, on the expected MPS kernel failure, auto-generate
 notebook targeting a free T4, because the 4-bit stack is CUDA-bound.
 
 Over 40 evaluation questions the fine-tune scored a mean cosine of 0.5079 against RAG's 0.4895
-(22/40 head-to-head wins) — but see the caveat below before reading anything into that.
+(22/40 head-to-head wins) — not significant (sign test p = 0.64). That arm used Gemma-3-1b +
+adapter with no retrieval, against TinyLlama + RAG, so it isn't a like-for-like comparison. 27/40
+fine-tune answers exceed MiniLM's 256-token input limit (only their opening is scored), and 15 of
+the first 20 evaluation prompts have near-duplicates in the training set.
 
 ## Honest caveats
 
 - **The generator is a stand-in.** `gemma-3-1b-it` is gated on Hugging Face and the evaluation
-  environment had no HF auth, so every score above was generated with `TinyLlama-1.1B-Chat`.
+  environment had no HF auth, so every RAG/router answer was generated with `TinyLlama-1.1B-Chat`; the Week 1
+  fine-tune arm used Gemma-3-1b + LoRA.
   The retrieval and routing logic is what's being measured; absolute answer quality is not.
   Swap `_GEN_MODEL` / `_USE_ADAPTER` in `hybrid_intent_router.py` once you have auth.
 - **No training curve was captured.** The LoRA adapter exists as proof training ran, but no
